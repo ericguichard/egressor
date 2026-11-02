@@ -47,7 +47,7 @@ users:
     tailnet: true
     home:
       country: it
-      home_egress_countries: [it, fr, uk]
+      home_egress_countries: [de, nl, uk]
       home_egress_tlds: [eu]
     # Extra WG exit (manual pick in 🌍 Default). Only laptop has the fixture
     # conf, so pixel/macbook prove a device without it gets no endpoint.

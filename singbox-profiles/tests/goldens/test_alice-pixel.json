@@ -379,17 +379,17 @@
         "update_interval": "1d"
       },
       {
-        "tag": "geoip-it",
+        "tag": "geoip-de",
         "type": "remote",
         "format": "binary",
-        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-it.srs",
+        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-de.srs",
         "update_interval": "7d"
       },
       {
-        "tag": "geoip-fr",
+        "tag": "geoip-nl",
         "type": "remote",
         "format": "binary",
-        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-fr.srs",
+        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-nl.srs",
         "update_interval": "7d"
       },
       {
@@ -500,16 +500,16 @@
       },
       {
         "rule_set": [
-          "geoip-it",
-          "geoip-fr",
+          "geoip-de",
+          "geoip-nl",
           "geoip-gb"
         ],
         "outbound": "🏠 Home Sites"
       },
       {
         "domain_suffix": [
-          "it",
-          "fr",
+          "de",
+          "nl",
           "uk",
           "eu"
         ],

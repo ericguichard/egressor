@@ -106,7 +106,7 @@ users:
 
   # ────────────────────────────────────────────────────────────────────
   # alice — admin traveller. Multi-country (CN+RU+IR), all 4 protocols,
-  # home-egress via WireGuard for IT/FR/UK traffic, and admin SSH bypass.
+  # home-egress via WireGuard for DE/NL/UK traffic (example codes), and admin SSH bypass.
   # Drop home_wg/alice-pixel.conf and home_wg/alice-laptop.conf alongside
   # this file (one .conf per device with a `home:` block).
   # ────────────────────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ users:
     admin: true
     home:
       country: it
-      home_egress_countries: [it, fr, uk]
+      home_egress_countries: [de, nl, uk]
       home_egress_tlds: [eu]
     devices:
       # type ∈ {mobile, windows, mac, linux}; at most one device per type per
