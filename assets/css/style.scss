@@ -1,0 +1,20 @@
+---
+---
+
+// Cayman theme first, then the IBM Plex overrides (fonts loaded in _includes/head-custom.html).
+@import "{{ site.theme }}";
+
+body {
+  font-family: "IBM Plex Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+// Headings: same family, heavier weight, so code blocks stay the visual accent.
+h1, h2, h3, h4, h5, h6,
+.project-name, .project-tagline {
+  font-family: "IBM Plex Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-weight: 600;
+}
+
+code, pre, kbd, samp {
+  font-family: "IBM Plex Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
