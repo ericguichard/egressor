@@ -295,7 +295,7 @@ region as the selector default:
 | Country | Default | Why |
 |---|---|---|
 | `cn` | `reality` | Fastest when the proxy IP isn't IP-blocked; ws-cf is the survival fallback. |
-| `ru` | `shadowtls` | Most resilient to RKN/TSPU's TCP-freeze attack on suspicious foreign IPs. |
+| `ru` | `shadowtls` | Most resilient to the national firewall's TCP-freeze attack on suspicious foreign IPs. |
 | `ir` | `shadowtls` | The most consistently surviving sing-box-native path post-2025 IR shutdown. |
 | traveller / multi-country | `hy2` | Speed-first default when no specific region is targeted. |
 
@@ -430,7 +430,7 @@ the current form of the argument:
 
 AWG never shows up as a sing-box selector option — it's served by a
 separate Amnezia VPN app on the user's device. When all four sing-box-
-native protocols fail (e.g. RKN coordinated TCP-freeze + UDP/443 throttle),
+native protocols fail (e.g. a coordinated TCP-freeze + UDP/443 throttle),
 the user starts the AWG tunnel from the Amnezia app as the second-leg
 fallback. The two-app split is documented in the per-user README and
 [hazards.md](hazards.md#amnezia-vpn-app-on-ios-conflicts-with-active-sing-box-vpn-profile).

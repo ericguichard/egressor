@@ -273,7 +273,7 @@ forwards the connection to the real cover site, which completes the
 handshake and serves its actual content. So an active prober sees a
 genuine, valid TLS session to a legitimate site every time. *Trade-off:*
 the chosen cover SNI must be reachable from the VPS and plausible-looking
-("a person at this IP browsing this site"). *Known weakness:* TSPU's
+("a person at this IP browsing this site"). *Known weakness:* the `ru` region firewall's
 TCP-freeze / IP-reputation attacks degrade Reality regardless of how
 clean the handshake is — once the VPS IP is flagged, packets get
 throttled or RST'd at the border. This is why AWG exists in parallel.
@@ -317,7 +317,7 @@ protocol-aware DPI it's "high-throughput unidentified UDP," which
 no signature classifier flags. *Trade-off:* "unidentified UDP to a
 foreign IP" is itself a coarse signal censors can act on at the
 IP/transport layer rather than the protocol layer. *Known weakness:*
-RU TSPU and IR ISPs have demonstrated blanket UDP throttling — when
+the RU and IR national firewalls have demonstrated blanket UDP throttling — when
 they do that, hy2 dies even though no classifier touched it. Also
 sing-box has no per-user bandwidth caps for hy2 (`hazards.md` #7).
 *When it works:* it screams — BBR-style congestion control, no HoL
@@ -334,7 +334,7 @@ speak AWG (the only AWG-capable fork is CLI-only, and the iOS App
 Store rejects it), so AWG runs in the separate Amnezia VPN app, not
 in the in-app selector. Two apps to install, not one. *Known
 weakness:* same blanket-UDP-throttling risk as hy2 — both die together
-under IP-level UDP marking. *When to enable it:* RU users where TSPU
+under IP-level UDP marking. *When to enable it:* RU users where the national firewall
 has degraded Reality, IR users where the national firewall pressures
 TLS-shaped traffic. Off by default for CN (that firewall handles
 protocol-aware classifiers but doesn't broadly mark UDP).
@@ -346,7 +346,7 @@ some national firewalls (for example in RU and IR) have demonstrated isn't — w
 protocols go dark together, fall back to one of the three TCP shapes.
 
 AmneziaWG's role is specifically the threat model RU users actually face:
-TSPU's TCP-freeze attack on suspicious foreign IPs has degraded Reality
+the national firewall's TCP-freeze attack on suspicious foreign IPs has degraded Reality
 through late 2025; CF CIDR whitelisting has degraded VLESS-over-WS in
 parallel. AWG is the protocol actually being deployed in that region — Amnezia's
 Banzaev confirms the operates-stably-with-periodic-signature-blocks

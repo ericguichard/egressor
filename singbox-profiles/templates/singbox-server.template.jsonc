@@ -77,7 +77,7 @@
     {
       // Hysteria2 — QUIC-based, masquerades as HTTP/3. Fast and CPU-cheap.
       // salamander obfs randomises the QUIC packet header so UDP-flow
-      // classifiers (used in RU TSPU and IR DPI) can't match a hy2 signature.
+      // classifiers (used by the RU and IR national firewalls) can't match a hy2 signature.
       // Self-signed cert with matching CN+SAN (set defaults.hy2.sni
       // in profiles.yaml to control both). Clients pin the PEM (not
       // insecure:true) — safe given shared-secret auth. The SAN is load-
@@ -190,7 +190,7 @@
     {
       // VLESS + WebSocket — CDN-fronted fallback for clients on networks
       // where the proxy IP is blackholed but Cloudflare's edges are still
-      // reachable (most RU TSPU, some CN scenarios). Traffic flow:
+      // reachable (most RU firewall cases, some CN scenarios). Traffic flow:
       //   client → Cloudflare (TLS terminate, orange-cloud)
       //          → reverse proxy (Traefik / Caddy / nginx with a real cert
       //                           for defaults['ws-cf'].host, Host-match route)

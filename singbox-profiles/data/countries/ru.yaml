@@ -8,7 +8,7 @@ doh_tag: yandex_doh
 doh_server: common.dns.yandex.net
 
 # Bootstrap DNS for users physically in RU. 1.1.1.1 is increasingly
-# interfered-with under RKN filtering; Yandex Public DNS is reachable
+# interfered-with under national filtering; Yandex Public DNS is reachable
 # and resolves CF hostnames truthfully for the pre-tunnel WS-CDN host
 # lookup. Tradeoff: Yandex sees the lookup, but the WS-CDN host →
 # CF edge IPs are pooled across many sites, so this leaks little.
@@ -39,7 +39,7 @@ rulesets:
 protocols:
   recommended: [reality, shadowtls, hy2, awg]
   # Country default for the 🔀 Proxy selector. shadowtls is the most
-  # resilient sing-box-native protocol to RKN/TSPU's TCP-freeze attack on
+  # resilient sing-box-native protocol to the national firewall's TCP-freeze attack on
   # suspicious foreign IPs that has degraded Reality through late 2025.
   # awg is recommended as a *parallel* tunnel via the separate Amnezia VPN
   # app (not the sing-box profile), so it doesn't appear as the sing-box

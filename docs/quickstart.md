@@ -410,7 +410,7 @@ failure modes.
 ### Rotate AWG obfuscation params periodically
 
 Quarterly cron is the suggested cadence (sooner if a regional throughput
-drop on AWG users suggests RKN has fingerprinted your specific param
+drop on AWG users suggests the national firewall has fingerprinted your specific param
 tuple). Cost: every AWG client must re-import their `.conf`.
 
 ```cron
