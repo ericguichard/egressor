@@ -1,0 +1,21 @@
+# GitHub Pages site config (https://egressor.org), built by .github/workflows/pages.yml.
+# Only the Markdown docs are published; the code directories stay out of the site.
+title: Egressor
+description: One YAML manifest, a household's whole egress path out of a hostile network.
+theme: jekyll-theme-cayman
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: false
+exclude:
+  - awg-server
+  - singbox-exporter
+  - singbox-server
+  - singbox-profiles/templates
+  - singbox-profiles/tests
+  - "*.py"
+  - "*.sh"
+  - Taskfile.yml
+  - LICENSE
+  - docs/egressor-announce.md

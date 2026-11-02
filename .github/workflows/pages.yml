@@ -1,0 +1,50 @@
+# Publishes the docs (README as the home page + docs/) to GitHub Pages at
+# https://egressor.org. Runs only on the public repo: the private working
+# repo cannot host Pages, so the job is skipped there instead of failing.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.repository == 'ericguichard/egressor'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The docs quote Go templates such as docker inspect --format '{{json .X}}'.
+      # Jekyll would read those as Liquid and print nothing, so every Markdown
+      # file is wrapped in raw/endraw here, in the runner only: the files in
+      # the repo stay plain Markdown for GitHub's own viewer.
+      - name: Disable Liquid in Markdown
+        run: |
+          git ls-files '*.md' | while read -r f; do
+            { printf '{%% raw %%}\n'; cat "$f"; printf '\n{%% endraw %%}\n'; } > "$f.tmp" && mv "$f.tmp" "$f"
+          done
+      - uses: actions/configure-pages@v5
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
