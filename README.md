@@ -409,13 +409,7 @@ For code changes:
 
 ## Formerly Clearway
 
-This project was named **Clearway** until 2026-08-27. GitHub redirects
-the old repository URL, but if you cloned before the rename, update your
-remote:
-
-```bash
-git remote set-url origin https://github.com/ericguichard/egressor.git
-```
+This project was named **Clearway** until 2026-08-27.
 
 Served profile filenames changed from `clearway-<user>-<type>…` to
 `egressor-<user>-<type>…` at the same time. If you run a pre-rename

@@ -226,7 +226,7 @@ the config hourly.
 Two periodic tasks for routine hygiene:
 
 ```cron
-# Monthly Reality short_id rotation. Zero-downtime via the 2h grace
+# Monthly Reality short_id rotation. Zero-downtime via the 7-day grace
 # window (see docs/architecture.md). 03:30 UTC on the 1st.
 30 3 1 * *  cd /opt/egressor/singbox-profiles && ./rotate-shortids.sh
 
@@ -431,12 +431,12 @@ tuple). Cost: every AWG client must re-import their `.conf`.
 Edit `profiles.yaml` → add a `users.<name>:` block → run `./render.py`.
 The renderer auto-fills all credentials, writes their per-device configs
 + README, regenerates the Windows / Linux installers, and re-applies the server
-config (with 2h rotation grace for any creds that changed). Send the new
+config (with a 7-day rotation grace for any creds that changed). Send the new
 user their URL.
 
 Removing a user is the same in reverse: delete the block from
 `profiles.yaml`, re-render. Their credentials sit in
-`.pending-rotations.yaml` for 2h (so any in-flight session can complete),
+`.pending-rotations.yaml` for 7 days (so any in-flight session can complete),
 then drop on the next render.
 
 ## Troubleshooting
