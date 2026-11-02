@@ -1,0 +1,78 @@
+services:
+  singbox-exporter:
+    # Pinned to 3.12-alpine (slim, stdlib-only exporter) — reproducible vs.
+    # floating :3 tag, and we don't need anything newer than 3.12.
+    image: python:3.12-alpine
+    container_name: singbox-exporter
+    restart: unless-stopped
+    # Host networking so the exporter can reach clash_api on 127.0.0.1:9095
+    # (singbox-server is also host-networked) AND bind its /metrics endpoint
+    # on 172.17.0.1:9097 for Prometheus (running on proxy bridge) to
+    # scrape via the docker0 host-side IP. This matches the existing pattern
+    # used by node-exporter at 172.17.0.1:9100.
+    network_mode: host
+    volumes:
+      # Mount read-only so a running container can't accidentally tamper
+      # with the script; all config comes through env.
+      - ${SINGBOX_EXPORTER_DIR}/exporter.py:/app/exporter.py:ro
+    # env_file loads CLASH_SECRET regardless of where `docker compose` is
+    # invoked. The top-level /opt/stack/.env doesn't carry it, and
+    # compose's ${VAR} interpolation only reads .env from the CWD of the
+    # compose invocation — not from the directory of the -f file. Without
+    # this, starting the exporter from /opt/stack (common, alongside
+    # other services) left CLASH_SECRET empty and the exporter crashlooped
+    # with "FATAL: CLASH_SECRET env is empty". Absolute path avoids the
+    # multi-compose merge path-resolution confusion (compose resolves
+    # relative env_file paths against the invocation cwd, not the file's
+    # own directory, which breaks when -f points outside that cwd).
+    env_file:
+      - ${SINGBOX_EXPORTER_DIR}/.env
+    environment:
+      # Defaults pinned to the singbox-server + Prometheus topology; override
+      # via .env if anything moves. 172.17.0.1:9097 is free (node-exporter
+      # is on :9100, cadvisor scraped via service name, docker-daemon :9323).
+      - CLASH_URL=http://127.0.0.1:9095/connections
+      - LISTEN_HOST=172.17.0.1
+      - LISTEN_PORT=9097
+    command: ["python3", "-u", "/app/exporter.py"]
+    # Hardening: exporter listens on a high port (9097) and doesn't need any
+    # Linux capabilities; drop the lot. Matches the singbox-server hardening
+    # pattern so a compromise of either container has a minimal capability
+    # set to work with. read_only is safe — Python stdlib doesn't write
+    # anywhere, and /tmp as tmpfs covers any import/bytecode cache the
+    # runtime might touch on cold start.
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Tiny workload — 30 MiB is generous for a stdlib HTTP server answering
+    # a single scrape per minute. Matches the rest of the stack's habit of
+    # capping only known-small services.
+    mem_limit: 64m
+    cpus: 0.25
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "3"
+    # Liveness: curl our own /metrics endpoint. A wedged exporter (e.g.
+    # thread deadlock) stops answering here; restart unless-stopped picks
+    # it up after 3 failed checks.
+    healthcheck:
+      # Probe /healthz (unauthenticated) rather than /metrics. /metrics now
+      # requires Bearer auth via EXPORTER_SECRET (2026-04-23), and passing the
+      # env var through `wget --header` works but complicates the quoting.
+      # /healthz returns "ok\n" on successful HTTP server bind — enough of a
+      # liveness signal. True scrape liveness is covered by the
+      # `singbox_up == 0 for 2m` Prometheus alert in prom-alerts.sh.
+      test: ["CMD-SHELL", "wget -qO- http://172.17.0.1:9097/healthz | grep -q ok"]
+      interval: 1m
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    profiles:
+      - singbox-exporter
+      - egressor
+      - all

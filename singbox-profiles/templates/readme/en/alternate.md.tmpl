@@ -1,0 +1,22 @@
+
+### If you can't install sing-box (CN / RU App Store)
+
+The CN App Store has banned all VPN/proxy apps; RU App Store availability
+fluctuates. **Canonical fix**: switch your Apple ID region to a non-RU/non-
+CN country (US, UK, etc.) and install sing-box from that store. Settings →
+your name → Media & Purchases → Country/Region.
+
+If region-switching isn't workable, you can install a different proxy
+client and import a **per-protocol single-outbound profile** instead. Each
+file contains exactly one outbound, so there's nothing for an alternate
+client's auto-switcher (e.g. Hiddify-Next, see Troubleshooting) to override.
+You import one file per protocol you want available, and switch protocol by
+switching profiles inside the alternate client.
+
+The per-protocol URLs:
+
+__PER_PROTOCOL_URLS__
+
+These work in any client that consumes a sing-box JSON profile. We don't
+endorse a specific alternate client — App Store availability for RU/CN
+shifts often. Ask the admin what's currently working before installing.

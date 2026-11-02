@@ -1,0 +1,65 @@
+services:
+  awg-server:
+    # Digest pin against the multi-arch index. amneziavpn/amneziawg-go is
+    # the upstream Amnezia image; pinning by digest blocks a compromise of
+    # the org's Docker Hub creds from rolling a backdoor onto a public-
+    # facing VPN. Bump via awg-server/bump-image.sh after reading release
+    # notes (mirrors singbox-server/bump-singbox-image.sh).
+    #
+    # Caveat: the upstream image is amd64-only as of this pin. ARM hosts
+    # (Oracle Ampere, Raspberry Pi) need a from-source build — see
+    # docs/hazards.md for the workaround.
+    image: amneziavpn/amneziawg-go:latest@sha256:cb91bdd8f3c8c586ae2bdf93374b58899c778756fe8b37a3c0506f9e611092f3
+    container_name: awg-server
+    restart: unless-stopped
+    # Opt-in profile so a default `docker compose up` doesn't start awg-server
+    # on deployments that aren't using it. Stage 4 documents the operator
+    # workflow: render.py emits this stack alongside singbox-server, but only
+    # users with `awg` in protocols actually need awg-server running.
+    profiles:
+      - awg-server
+      - egressor
+      - all
+    # NET_ADMIN required: amneziawg-go creates a TUN device and rewrites
+    # iptables NAT rules in PostUp / PostDown. This is unavoidable for any
+    # WG userspace implementation. Compensate with read-only rootfs, digest
+    # pin, narrow port exposure, no-new-privileges (below). Documented in
+    # docs/hardening.md.
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv4.ip_forward=1
+    volumes:
+      # awg0.conf is rendered by ../singbox-profiles/render.py from
+      # .secrets.yaml's awg block + the AWG-enabled users. Read-only
+      # bind so a wedged container can't corrupt the config and drag a
+      # rotation cycle into a half-applied state.
+      - ${SINGBOX_SERVER_DIR}/../awg-server/config/awg0.conf:/etc/amneziawg/awg0.conf:ro
+    # INCOMING_IP_1 is the same env var singbox-server uses for hy2's
+    # UDP/443 bind. AWG can share that VNIC at a different port (51820 is
+    # the WG default) — they're independent UDP listeners. Single-VNIC
+    # deployments can set INCOMING_IP_1=0.0.0.0.
+    ports:
+      - "${INCOMING_IP_1}:51820:51820/udp"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    # /run for amneziawg-go's PID file; the container otherwise writes
+    # nothing to disk (config is ro-bind-mounted, logs go to stderr).
+    tmpfs:
+      - /run
+    # Resource ceiling. Userspace WG is CPU-bound under high throughput
+    # (one core per ~1 Gbps on modern x86, lower on ARM). The household
+    # scale this targets has aggregate AWG traffic in the low-hundred-Mbps
+    # range, well below the 0.5 CPU ceiling. mem stays small (WG state is
+    # tiny — peers + crypto contexts).
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

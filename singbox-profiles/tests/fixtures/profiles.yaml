@@ -1,0 +1,96 @@
+# Fixture manifest for golden-file tests. Deliberately covers the
+# combinations render.py actually branches on, NOT a copy of any production
+# manifest:
+#   - a traveller with every protocol + home_wg + admin   (test_alice)
+#   - a single-country resident with two protocols        (test_bob)
+#   - a multi-country traveller without home_wg           (test_dave)
+# All credentials are fixed (no random gen) so the rendered output is
+# deterministic and the goldens stay stable across reruns.
+defaults:
+  utls_fingerprint: chrome
+  reality:
+    server: 198.51.100.10
+    server_port: 443
+    handshake_sni: console.example.com
+    flow: xtls-rprx-vision
+  ws-cf:
+    host: vpnws.example.com
+    path: /ws
+    port: 443
+  shadowtls:
+    server_port: 8443
+    version: 3
+    sni: cloud.example.com
+    shadowsocks_method: 2022-blake3-aes-256-gcm
+  hy2:
+    server_port: 443
+    sni: cloud.example.com
+
+  # SIP hub bypass (literal TEST-NET IP -> ip_cidr branch); see render.py
+  sip_hub:
+    hosts: [sip.example.com, 192.0.2.25]
+    port_ranges: ["5061:5061", "10000:10100"]
+    android_packages: [com.example.softphone]
+
+users:
+
+  # Full-featured traveller: every protocol, home_wg egress, admin SSH.
+  # Exercises frag_outbound_* on every branch plus frag_home_endpoint.
+  test_alice:
+    countries: [cn, ru, ir]
+    protocols: [reality, ws-cf, shadowtls, hy2]
+    utls_fingerprint: chrome
+    admin: true
+    # Pins the tailnet live-switch coverage: mobile pixel gets 🔗 Tailnet
+    # defaulting to 🔀 Proxy, windows laptop to ➡️ Direct, and the 100.64/10
+    # route rule must precede both the ip_is_private and (admin) port-22 rules.
+    tailnet: true
+    home:
+      country: it
+      home_egress_countries: [it, fr, uk]
+      home_egress_tlds: [eu]
+    # Extra WG exit (manual pick in 🌍 Default). Only laptop has the fixture
+    # conf, so pixel/macbook prove a device without it gets no endpoint.
+    exits:
+      # lan: proves the remote-LAN rule lands before ip_is_private.
+      - { name: second, tag: '🏡 Second', lan: ['10.99.0.0/24'] }
+    devices:
+      # macbook pins the mac-type coverage: mobile-shaped config but NO ntp
+      # block, NO clash_api/clash_secret, NO per-protocol solo files, and the
+      # 🔗 Tailnet selector defaulting to ➡️ Direct (like windows). Also
+      # proves the collision guard accepts one device of each of the 3 types.
+      # pixel also pins the embedded-Tailscale coverage: 🧵 Tailscale
+      # endpoint + selector member/default + the two inbound rules.
+      - { type: mobile,  name: pixel, tailscale: true }
+      # laptop pins windows+tailscale: selector default 🧵, override_port 22
+      # (desktop OpenSSH), endpoint alongside the updater/clash_api extras.
+      - { type: windows, name: laptop, tailscale: true, tailscale_detour: proxy }
+      - { type: mac,     name: macbook }
+
+  # Single-country resident, two protocols. Shorter outbound list,
+  # Restricted defaults to the country Direct.
+  test_bob:
+    countries: [cn]
+    protocols: [reality, ws-cf]
+    utls_fingerprint: safari
+    devices:
+      - { type: mobile,  name: iphone }
+
+  # Two-country traveller without home_wg. Restricted defaults to 🌍 Default.
+  # Carries 'awg' to exercise the stage-1 AWG schema + per-user .conf
+  # emission. AWG never lands in the sing-box profile (protocols enum allows
+  # it but no outbound is emitted), so the JSON goldens for test_dave-pc are
+  # unaffected by adding awg here — only test_dave's awg.conf is new.
+  test_dave:
+    countries: [ru, ir]
+    protocols: [reality, hy2, awg]
+    utls_fingerprint: firefox
+    devices:
+      - { type: windows, name: pc }
+      # workstation pins the linux-type coverage: windows-shaped desktop config
+      # (clash_api, full
+      # blocklists, no ntp) with the systemd install path. Its AWG short alias
+      # `test_dave-linux.conf` is exactly AWG_TUNNEL_NAME_MAX chars.
+      # core_min raises this one desktop to the 1.14 field set, so the
+      # per-device override is covered next to the per-type defaults.
+      - { type: linux,   name: workstation, core_min: '1.14' }

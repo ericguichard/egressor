@@ -1,0 +1,78 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:  # manual retry from `gh workflow run tests` or the Actions UI — useful when GitHub Actions has degraded runner allocation
+
+permissions:
+  contents: read
+
+jobs:
+  golden-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # render.py's runtime deps. `cryptography` is needed for X25519 public-
+      # key derivation on the AWG path (per-user awg_private_key → public key
+      # in the awg-server [Peer] block). Test fixtures + harness otherwise
+      # use stdlib only.
+      - name: Install dependencies
+        run: pip install jsonschema pyyaml cryptography
+
+      - name: Render syntax check
+        run: python3 -c "import ast; ast.parse(open('singbox-profiles/render.py').read())"
+
+      - name: Golden-file tests
+        working-directory: singbox-profiles
+        run: python3 tests/test_render.py
+
+  # This repo is developed inside a private household deployment and published
+  # from it, so operator-specific names can ride along in comments. That has
+  # happened twice; the manual pre-push scan is tuned for credentials and does
+  # not catch identifiers. This job is the durable guard.
+  #
+  # Deliberately NOT a secret scanner (use gitleaks/trufflehog for that) — it
+  # checks only for private-deployment identifiers leaking into tracked files.
+  # Extend the IDENTIFIER_PATTERN secret when a new one appears rather than
+  # silencing the job.
+  identifier-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No private-deployment identifiers in tracked files
+        env:
+          # The pattern itself IS the list of private identifiers, so it lives
+          # in a repository secret rather than in this public file (until
+          # 2026-09-26 it was inline here, which published every name it was
+          # meant to keep out). Word boundaries make bare names sufficient:
+          # \bname\b matches "name-laptop" and "name/phone" because "-" and
+          # "/" are non-word characters. A generic '-(laptop|mobile|pixel)'
+          # rule was tried and rejected: it flags this repo's own documented
+          # example persona (alice-laptop, alice-pixel) and ordinary words.
+          PATTERN: ${{ secrets.IDENTIFIER_PATTERN }}
+        run: |
+          set -uo pipefail
+          # Forks and fresh clones have no secret: skip loudly, don't pass silently.
+          if [ -z "${PATTERN:-}" ]; then
+            echo "::warning::IDENTIFIER_PATTERN secret not set; identifier guard skipped."
+            exit 0
+          fi
+          # Tracked files only, case-insensitive (-i: a capitalised name is
+          # still a name), -I skips binaries. This workflow no longer holds
+          # the patterns, so it is scanned like everything else.
+          if git ls-files -z | xargs -0 grep -niEI -- "$PATTERN" ; then
+            echo
+            echo "::error::Private-deployment identifier found in a tracked file."
+            echo "Replace it with a generic description (e.g. 'a Windows client')."
+            echo "The technical provenance is worth keeping — the name is not."
+            exit 1
+          fi
+          echo "OK — no private-deployment identifiers found."

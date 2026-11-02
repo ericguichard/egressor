@@ -1,0 +1,249 @@
+# Taskfile.yml — operator surface for the Egressor VPN sub-stack.
+#
+# Provides a unified entrypoint for the day-to-day operations the
+# rotation/render/restart/bump scripts in this repo expose. The scripts
+# themselves are the source of truth; this file only wraps them so an
+# operator doesn't have to remember which subdir each one lives in.
+#
+# Install go-task: https://taskfile.dev/installation/
+#   sudo snap install task --classic        # Ubuntu/Debian
+#   brew install go-task/tap/go-task        # macOS
+#
+# Usage:
+#   task                  show this list (alias for `task -l`)
+#   task -l               list all tasks with descriptions
+#   task <namespace>:<verb>
+#
+# Convention: namespace = scope, verb = action.
+#
+#   render:*    convenience wrappers around singbox-profiles/render.py
+#               (the Python engine that emits all client + server configs)
+#   verify:*    non-destructive sanity checks (golden tests, render
+#               --validate, hy2 cert window)
+#   singbox:*   singbox-server operations (restart, bump, upstream check,
+#               rotate-shortids/realitykey/hy2)
+#   awg:*       awg-server operations (restart, bump, upstream check,
+#               rotate-params)
+#   egressor:*  cross-service status — currently `rotations` only
+#
+# Compose orchestration (up/stop/status/logs) is NOT exposed here because
+# there's no canonical compose topology in this repo — each subservice
+# has its own compose.yaml under singbox-server/, awg-server/, and
+# singbox-profiles/. Wire those into your own root compose or systemd
+# unit; this Taskfile is for the operations that *don't* depend on
+# topology.
+#
+# Rotation cadence (see README.md § Rotation):
+#   short_ids        monthly         zero-downtime (7-day grace window)
+#   Reality keypair  quarterly       alternating endpoints (7-day overlap) or FLAG DAY
+#   hy2 cert         yearly          no flag day (next key pinned a cycle ahead)
+#   AWG params       manual          flag day, MANUAL .conf re-import per device
+
+version: '3'
+
+tasks:
+
+  default:
+    desc: Show available tasks (same as `task -l`)
+    silent: true
+    cmd: task -l
+
+  # ===========================================================================
+  # RENDER — wrappers around singbox-profiles/render.py
+  # ===========================================================================
+  # render.py is the source of truth for client + server sing-box configs.
+  # It reads profiles.yaml + .secrets.yaml + home_wg/ and emits per-device
+  # configs and the server config in one pass. These tasks just spare you
+  # `cd singbox-profiles && ./render.py …` typing.
+
+  render:
+    desc: Render — show diffs, prompt to apply (interactive default)
+    dir: '{{.TASKFILE_DIR}}/singbox-profiles'
+    cmd: ./render.py
+
+  render:dry:
+    desc: Render dry-run — show what would change without writing anything
+    dir: '{{.TASKFILE_DIR}}/singbox-profiles'
+    cmd: ./render.py --dry-run
+
+  render:apply:
+    desc: Render and apply without prompting (cron-safe, used by rotation scripts)
+    dir: '{{.TASKFILE_DIR}}/singbox-profiles'
+    cmd: ./render.py -y
+
+  # ===========================================================================
+  # VERIFY — non-destructive sanity checks
+  # ===========================================================================
+
+  verify:
+    desc: Run every verify:* check in sequence
+    cmds:
+      - task: verify:hy2-cert
+      - task: verify:golden-tests
+      - task: verify:render
+      - echo "---"
+      - echo "All verifications passed."
+
+  verify:hy2-cert:
+    desc: Show hy2 cert validity window + SAN (issued for 3yr, with SAN)
+    silent: true
+    cmd: |
+      openssl x509 -in {{.TASKFILE_DIR}}/singbox-server/hy2.crt \
+        -noout -dates -subject -ext subjectAltName 2>&1 \
+        | sed 's/^/  /'
+
+  verify:golden-tests:
+    desc: Run singbox-profiles golden tests (should be 4/4)
+    dir: '{{.TASKFILE_DIR}}/singbox-profiles'
+    silent: true
+    cmd: ./tests/test_render.py 2>&1 | tail -2
+
+  verify:render:
+    desc: Run render.py --validate (manifest + sing-box check on all configs)
+    dir: '{{.TASKFILE_DIR}}/singbox-profiles'
+    silent: true
+    cmd: ./render.py --validate 2>&1 | tail -3
+
+  # ===========================================================================
+  # SINGBOX — singbox-server operations
+  # ===========================================================================
+  # Compose-orchestration verbs (up/stop/status/logs) deliberately omitted
+  # — wire those into your own root compose. These are the actions that
+  # don't depend on topology: validate-and-restart, controlled image bump,
+  # upstream-version check, credential rotation tiers.
+
+  singbox:restart:
+    desc: Restart singbox-server safely (validates config, bind-mount inode-safe)
+    # safe-restart.sh runs `sing-box check` against the live config first,
+    # then `compose up -d` with a `docker restart` fallback when the up is
+    # a no-op. The fallback exists because `compose up -d` is a no-op when
+    # nothing in the compose definition changed, but a bind-mounted file
+    # rewrite (e.g. cert rotation) needs the container to re-open the
+    # inode — silently broke hy2 for 16h after one such rotation.
+    cmd: '{{.TASKFILE_DIR}}/singbox-server/safe-restart.sh'
+
+  singbox:bump:
+    desc: Bump sing-box image to a newer digest (validates against live config)
+    # Pulls :latest, runs `sing-box check` against the new image with the
+    # live config, rewrites the @sha256:... pin in compose.yaml, and
+    # safe-restarts. Refuses if the check fails so a config-shape regression
+    # in a new sing-box minor doesn't ship.
+    cmd: '{{.TASKFILE_DIR}}/singbox-server/bump-image.sh'
+
+  singbox:bump:dry:
+    desc: Dry-run the sing-box bump (resolve new digest + sing-box check, don't apply)
+    cmd: '{{.TASKFILE_DIR}}/singbox-server/bump-image.sh --check-only'
+
+  singbox:check:
+    desc: Check SagerNet/sing-box for a newer release
+    # Read-only: queries the running container's `sing-box version` and
+    # github.com/SagerNet/sing-box/releases/latest, prints a bump report
+    # only if upstream is newer.
+    cmd: '{{.TASKFILE_DIR}}/singbox-server/check-upstream.sh'
+
+  singbox:rotate-shortids:
+    desc: Rotate Reality short_ids per device — monthly (zero-downtime, 7-day grace)
+    # Render.py writes new short_ids to live config and stashes the old
+    # ones in .pending-rotations.yaml with a 7-day TTL. Clients pick up new
+    # ids on next poll within that window; no broken handshakes.
+    cmd: '{{.TASKFILE_DIR}}/singbox-profiles/rotate-shortids.sh'
+
+  singbox:rotate-realitykey:
+    desc: Rotate Reality X25519 keypair — quarterly (alternating endpoints if server_b is set, else FLAG DAY)
+    # With a second endpoint (defaults.reality.server_b + INCOMING_IP_2)
+    # the new key starts on the other endpoint and the previous key stays
+    # live for REALITY_OVERLAP_DAYS; run `rotate-realitykey.sh --retire`
+    # afterwards (daily cron is fine). Without it this is a flag day: clients
+    # fail Reality handshakes until they APPLY the new profile. `prompt:`
+    # guards typo'd tab-completion; bypass with `task -y`. Cron is unaffected
+    # (calls the script directly, not through `task`).
+    prompt: "Rotate the Reality keypair now (flag day unless a second endpoint is configured)?"
+    cmd: '{{.TASKFILE_DIR}}/singbox-profiles/rotate-realitykey.sh'
+
+  singbox:rotate-hy2:
+    desc: Rotate Hysteria2 cert+key — yearly (no flag day; needs the hy2-next pair)
+    # Promotes the pre-generated hy2-next pair, whose public-key pin every
+    # client already carries, restarts the server and verifies a handshake.
+    # Refuses to run without a next pair (rotate-hy2-cert.sh --bootstrap).
+    prompt: "Rotate the hy2 key now (promotes hy2-next; the server restarts)?"
+    cmd: '{{.TASKFILE_DIR}}/singbox-server/rotate-hy2-cert.sh'
+
+  # ===========================================================================
+  # AWG — awg-server operations (AmneziaWG, parallel resilience tunnel)
+  # ===========================================================================
+
+  awg:restart:
+    desc: Restart awg-server safely (validates awg0.conf, bind-mount inode-safe)
+    cmd: '{{.TASKFILE_DIR}}/awg-server/safe-restart.sh'
+
+  awg:bump:
+    desc: Rebuild amneziawg:local from upstream and update digest pin
+    # ARM-host path: `docker build --no-cache` from awg-server/build/, read
+    # the new image Id, rewrite the @sha256:... pin in compose.yaml,
+    # safe-restart. Run when awg:check flags newer commits. (Registry-pull
+    # bump is amd64-only as of 2026-04 and not exposed here.)
+    cmd: '{{.TASKFILE_DIR}}/awg-server/rebuild-local.sh'
+
+  awg:bump:dry:
+    desc: Dry-run the AWG bump (build + show new digest, don't apply)
+    cmd: '{{.TASKFILE_DIR}}/awg-server/rebuild-local.sh --check-only'
+
+  awg:check:
+    desc: Check amnezia-vpn/amneziawg-{go,tools} for newer commits
+    cmd: '{{.TASKFILE_DIR}}/awg-server/check-upstream.sh'
+
+  awg:rotate-params:
+    desc: Rotate AWG obfuscation params (Jc/Jmin/Jmax/S1/S2/H1-H4) — manual (recommended quarterly)
+    # AWG params are the deployment's DPI fingerprint (not auth secrets).
+    # A censor that fingerprints this exact tuple can signature-block it;
+    # rotation gives a fresh obfuscation surface. Cost: every AWG device
+    # must MANUALLY re-import its .conf — the Amnezia VPN app does NOT
+    # auto-refresh imported configs. No cron by design (unattended fire
+    # would lock users out).
+    prompt: "Every AWG client must MANUALLY re-import its .conf after this — no auto-refresh in the Amnezia app. Continue?"
+    cmd: '{{.TASKFILE_DIR}}/awg-server/rotate-params.sh'
+
+  # ===========================================================================
+  # EGRESSOR — cross-service operator views
+  # ===========================================================================
+
+  egressor:rotations:
+    desc: Show last-fire + next-fire date for each rotation tier
+    # Reads the most recent rotation backup mtime per tier (rotation
+    # scripts always snapshot before mutating, so the newest backup =
+    # the last successful rotation). Next-fire is computed in Python from
+    # the documented cadence so it stays accurate if your cron differs.
+    silent: true
+    cmds:
+      - |
+        SP={{.TASKFILE_DIR}}/singbox-profiles
+        SS={{.TASKFILE_DIR}}/singbox-server
+        # Parse a 20260501T040001Z stamp into 2026-05-01. Empty input → "never".
+        fmt() { local s="$1"; [ -z "$s" ] && { echo "never"; return; }; echo "${s:0:4}-${s:4:2}-${s:6:2}"; }
+        # Globs unquoted so shell expands; head reads empty stdin on no match.
+        sid_last=$(fmt "$(ls -1t ${SP}/.secrets.yaml.bak-shortid-*    2>/dev/null | head -1 | sed -E 's/.*\.bak-shortid-([0-9TZ]+)$/\1/')")
+        key_last=$(fmt "$(ls -1t ${SP}/.secrets.yaml.bak-reality-*     2>/dev/null | head -1 | sed -E 's/.*\.bak-reality-([0-9TZ]+)$/\1/')")
+        hy2_last=$(fmt "$(ls -1t ${SS}/hy2.crt.bak-*                   2>/dev/null | head -1 | sed -E 's/.*\.bak-([0-9TZ]+)$/\1/')")
+        awg_last=$(fmt "$(ls -1t ${SP}/.secrets.yaml.bak-awgparams-*   2>/dev/null | head -1 | sed -E 's/.*\.bak-awgparams-([0-9TZ]+)$/\1/')")
+        sid_next=$(python3 -c "import datetime; t=datetime.date.today(); y,m=(t.year+1,1) if t.month==12 else (t.year,t.month+1); print(datetime.date(y,m,1).isoformat())")
+        key_next=$(python3 -c "
+        import datetime
+        t = datetime.date.today()
+        for y in (t.year, t.year + 1):
+            for m in (1, 4, 7, 10):
+                d = datetime.date(y, m, 1)
+                if d > t: print(d.isoformat()); raise SystemExit
+        ")
+        hy2_next=$(python3 -c "
+        import datetime
+        t = datetime.date.today()
+        c = datetime.date(t.year, 4, 1)
+        if c <= t: c = datetime.date(t.year + 1, 4, 1)
+        print(c.isoformat())
+        ")
+        printf "%-22s %-12s %-12s %s\n" "tier" "cadence" "last fire" "next fire @ UTC"
+        printf "%-22s %-12s %-12s %s\n" "----" "-------" "---------" "---------------"
+        printf "%-22s %-12s %-12s %s\n" "Reality short_id"  "monthly"   "$sid_last" "${sid_next} 04:00"
+        printf "%-22s %-12s %-12s %s\n" "Reality keypair"   "quarterly" "$key_last" "${key_next} 04:00"
+        printf "%-22s %-12s %-12s %s\n" "Hysteria2 cert"    "yearly"    "$hy2_last" "${hy2_next} 05:00"
+        printf "%-22s %-12s %-12s %s\n" "AWG obfusc-params" "manual"    "$awg_last" "(no cron — task awg:rotate-params)"

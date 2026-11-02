@@ -1,0 +1,27 @@
+# AmneziaWG server config. Strict `awg setconf`-compatible format —
+# carries only the fields the loader accepts (PrivateKey, ListenPort,
+# AWG params, Peer keys/AllowedIPs). Address / MTU / PostUp / PostDown
+# are wg-quick concepts that `awg setconf` rejects with "Line
+# unrecognized"; whatever entrypoint loads this file is responsible for
+# `ip addr add <subnet>.1/<prefix> dev <iface>`, MTU, and iptables
+# MASQUERADE / FORWARD setup. See docs/architecture.md.
+#
+# Jc/Jmin/Jmax/S1/S2/H1-H4 must match every client EXACTLY — one
+# mismatched param silently times out the handshake (by AWG design,
+# resists active probing). Rotate via awg-server/rotate-awg-params.sh
+# which updates this server config and every per-device awg-<dev>.conf
+# atomically; clients then re-import (Amnezia VPN doesn't auto-refresh).
+[Interface]
+ListenPort = __AWG_PORT__
+PrivateKey = __AWG_SERVER_PRIVATE_KEY__
+Jc = __AWG_JC__
+Jmin = __AWG_JMIN__
+Jmax = __AWG_JMAX__
+S1 = __AWG_S1__
+S2 = __AWG_S2__
+H1 = __AWG_H1__
+H2 = __AWG_H2__
+H3 = __AWG_H3__
+H4 = __AWG_H4__
+
+__PEERS__

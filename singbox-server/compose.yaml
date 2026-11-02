@@ -1,0 +1,110 @@
+services:
+  singbox-server:
+    # Digest pin instead of :latest. Why: a compromise of the ghcr.io
+    # sagernet org (stolen credential, CI breach) would otherwise propagate
+    # through Watchtower (or any auto-updater) to this public-facing VPN
+    # within hours, with clients auto-fetching their configs against a
+    # backdoored server. Pin-by-digest means the image is immutable — a
+    # malicious re-tag of :latest can't affect us until an operator reviews
+    # release notes and runs bump-image.sh. Watchtower (and similar
+    # tools) skip containers pinned by digest by default.
+    image: ghcr.io/sagernet/sing-box:latest@sha256:0788ffbddab2c68a99a2dd4780bbc50902f159af6f589df3ee74a8389d278279
+    container_name: singbox-server
+    restart: unless-stopped
+    # host networking: sing-box binds directly to 0.0.0.0:8443 on the host and
+    # reaches the Shadowsocks backend at 127.0.0.1:8388 in the same namespace.
+    # Bridge networking would need extra port mapping and break the localhost ref.
+    network_mode: host
+    volumes:
+      - ${SINGBOX_SERVER_DIR}/config.json:/etc/sing-box/config.json:ro
+      # Hysteria2 TLS — self-signed ECDSA cert. CN/SAN should match
+      # defaults.hysteria2.sni in profiles.yaml. SAN is required —
+      # Go TLS rejects leaf certs without SAN even with a pinned root,
+      # so hy2 silently refuses to handshake if it's missing.
+      # Generate with rotate-hy2-cert.sh (sets CN+SAN correctly).
+      # Manual openssl equivalent (replace the SNI):
+      #   openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
+      #     -keyout hy2.key -out hy2.crt -days 3650 -nodes -subj "/CN=cloud.example.com" \
+      #     -addext "subjectAltName=DNS:cloud.example.com"
+      # rotate-hy2-cert.sh rotates without a flag day: it promotes the
+      # pre-generated hy2-next pair, restarts the server and re-renders
+      # the client pins (see the script header).
+      - ${SINGBOX_SERVER_DIR}/hy2.crt:/etc/sing-box/hy2.crt:ro
+      - ${SINGBOX_SERVER_DIR}/hy2.key:/etc/sing-box/hy2.key:ro
+    command: run -c /etc/sing-box/config.json
+    # Container hardening. Process runs as ${PUID}:${PGID} (typically
+    # matching the host user that owns the bind-mounted config.json +
+    # hy2.crt/key). Because the process is the file owner, no DAC
+    # capability is needed.
+    #
+    # Low-port binding on :443/:8443 is enabled host-side by the sysctl
+    # `net.ipv4.ip_unprivileged_port_start=443` (drop into
+    # /etc/sysctl.d/99-singbox-unpriv-port.conf), which lets any UID
+    # bind ports ≥ 443 without CAP_NET_BIND_SERVICE. So cap_add is empty;
+    # this is the minimal cap set (CapEff=0, CapBnd=0, CapInh=0).
+    #
+    # Why not rely on Docker's ambient-cap promotion? Docker 29.4 does
+    # not ambient-promote cap_add entries for non-root users (CapBnd
+    # gets populated, CapEff stays 0). The sysctl sidesteps the whole
+    # capability dance.
+    #
+    #   - no-new-privileges: defeats any in-image setuid binary or file
+    #     capability; the process tree can never elevate post-exec.
+    #   - read_only rootfs + tmpfs /tmp: sing-box writes nothing on disk
+    #     (config is a ro bind mount, logs go to stderr, clash_api state
+    #     is in-memory). /tmp as tmpfs covers any Go runtime scratch.
+    user: "${PUID}:${PGID}"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Resource ceilings: this is a public-internet-facing service that auto-
+    # rejects steady probing from scanners. Without a cap, a sustained
+    # probing flood (or a runtime memory leak) can starve other containers
+    # on the same host. 512 MiB and 1.5 CPU are generous for a sing-box
+    # with small-team load (typical steady-state <40 MiB / <5% CPU); if
+    # this ever hits the ceiling, that's a signal to investigate.
+    mem_limit: 512m
+    cpus: 1.5
+    # Cap the JSON log file at 10 MB × 3 rotations. Without this, Docker's
+    # default is unbounded and the warn-level error noise from internet
+    # scanners hitting Reality grows the log to gigabytes over weeks.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Healthcheck: probe the inbounds that can be checked without tripping
+    # sing-box's own per-inbound auth logging, plus the server-side
+    # clash_api on 127.0.0.1:9095. clash_api binds late in sing-box init,
+    # so a process wedged after partial bind (e.g. cert load failed mid-way)
+    # will fail the 9095 probe even if some inbound sockets are already
+    # listening — strictly better liveness signal than `nc`'ing each inbound.
+    #   - ShadowTLS  TCP  127.0.0.1:8443         (public, probe via loopback)
+    #   - VLESS+WS   TCP  172.17.0.1:10001       (docker0 bridge, CDN-fronted)
+    #   - Hysteria2  UDP  ${INCOMING_IP_1}:443  (nc -uz is a weak check —
+    #                       UDP has no handshake — but catches firewalled /
+    #                       unbound state via ICMP unreachable; clash_api
+    #                       below covers process-liveness)
+    #   - clash_api  TCP  127.0.0.1:9095         (sing-box internal control
+    #                       plane; port opens only after full init)
+    # Reality on the secondary VNIC's :443 is deliberately NOT probed:
+    # `nc -z` opens TCP and closes without sending a TLS ClientHello,
+    # which Reality logs every tick as "processed invalid connection".
+    # Reality shares the same process as the other inbounds — if clash_api
+    # + ShadowTLS + WS-in are up, Reality is up.
+    healthcheck:
+      # ${INCOMING_IP_1} = the IP Hysteria2 binds to. Single-VNIC
+      # deployments can set this to 127.0.0.1 (loopback probe will still
+      # detect a wedged hy2 listener) or to the host's primary IP.
+      test: ["CMD-SHELL", "nc -z -w 3 127.0.0.1 8443 && nc -z -w 3 172.17.0.1 10001 && nc -uz -w 3 ${INCOMING_IP_1} 443 && nc -z -w 3 127.0.0.1 9095"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    profiles:
+      - singbox-server
+      - egressor
+      - all

@@ -1,0 +1,35 @@
+## AmneziaWG (parallel resilience tunnel)
+
+Your profile includes an AmneziaWG (AWG) tunnel for protocol diversity. AWG
+runs as a *separate* VPN in the Amnezia VPN app — not via the sing-box
+client above. Use it when the sing-box-native protocols are blocked
+(typically RU/IR; AWG is what Russians are actually deploying against
+RKN/TSPU and what survives Iranian QUIC blackouts).
+
+### Step 1 — Install Amnezia VPN
+
+- **Android** — [amnezia-client GitHub releases](https://github.com/amnezia-vpn/amnezia-client/releases). Verify the SHA256 against the release notes before installing.
+- **iOS** — [Amnezia VPN App Store](https://apps.apple.com/app/amneziavpn/id1600529900) — free.
+  Simplest alternative: the standalone [AmneziaWG app](https://apps.apple.com/us/app/amneziawg/id6478942365)
+  imports a plain `.conf` via in-app QR scan (**+** → **Create from QR code**, with the QR
+  displayed on another screen).
+
+### Step 2 — Import your AWG config (per device)
+
+Each of your devices has its own AWG identity (keypair + IP) — import the
+config matching the device you're setting up:
+
+__AWG_URL_BLOCK__
+
+In the Amnezia app on each device: **+** → **From file/URL** → paste that
+device's URL or import the saved file. The app picks up the AWG obfuscation
+params automatically. The app names the tunnel after the file and only
+accepts names up to 15 characters, which is why the URL is short — if you
+save the file first, keep its name as is.
+
+### iOS caveat — only one VPN active at a time
+
+iOS allows exactly one VPN profile to be running. To switch between sing-box
+and Amnezia VPN: open the *other* app and start its VPN — iOS automatically
+deactivates the previous one. Android allows both VPNs to coexist on
+different network namespaces, no manual switching required.

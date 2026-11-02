@@ -1,0 +1,257 @@
+{
+  // sing-box server — four inbounds for censorship-resistant access.
+  // Runs as a Docker container with host networking on a VPS.
+  // Authoritative source for this file is the singbox-profiles renderer
+  // (profiles.yaml + .secrets.yaml + this template); never hand-edit
+  // config.json — re-run ./render.py --server-apply.
+  //
+  // Inbounds:
+  //   1) TCP :8443                ShadowTLS v3 → 127.0.0.1:8388 Shadowsocks-2022 AES-256
+  //   2) UDP :443                 Hysteria2 (QUIC, salamander obfs)  — bound to a secondary VNIC IP
+  //   3) TCP :443                 VLESS + Reality + Vision           — bound to a secondary VNIC IP
+  //   4) TCP 172.17.0.1:10001     VLESS + WS  (CDN-fronted via a reverse proxy)
+  //
+  // Why four: each protocol has different censorship survival profiles.
+  // ShadowTLS survives pure-TCP DPI (IR/CN backbones drop QUIC). hy2 wins
+  // on speed where UDP is allowed (RU, most IR). Reality blends as plain
+  // HTTPS to a real handshake target. WS-CDN is a CDN-front fallback for
+  // networks where the proxy IP is blackholed. Client urltest picks the
+  // fastest live one.
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "inbounds": [
+    {
+      // ShadowTLS v3 — performs a real TLS handshake by proxying to the
+      // configured cover host so the session looks like legitimate traffic
+      // to that hostname. After auth the inner stream is forwarded to the
+      // Shadowsocks inbound. Pick a cover host that's plausibly reachable
+      // from your VPS's public IP (e.g. for an Oracle Cloud VM, use an
+      // Oracle Cloud hostname; for an AWS/GCP VM, pick a corresponding
+      // cloud-provider hostname).
+      "type": "shadowtls",
+      "tag": "shadowtls-in",
+      "listen": "0.0.0.0",
+      "listen_port": 8443,
+      "version": 3,
+      // strict_mode: reject connections that fail ShadowTLS auth rather than
+      // forwarding them to the handshake server. Hardens against active probes.
+      "strict_mode": true,
+      // wildcard_sni: "authed" accepts any SNI from the client after auth
+      // succeeds (before auth the handshake still relays to the handshake
+      // server, preserving cover). Lets each client present a different
+      // plausible SNI (e.g. cover.example.com, docs.example.com, console.*)
+      // so a DPI tuned to "that exact SNI on TCP:8443" loses its
+      // fingerprint. Requires sing-box 1.8+.
+      "wildcard_sni": "authed",
+      // Users populated by render.py from profiles.yaml (user.shadowtls_password).
+      "users": __USERS_SHADOWTLS__,
+      // The real TLS server whose certificate and handshake are borrowed.
+      "handshake": {
+        "server": "__SHADOWTLS_SNI__",
+        "server_port": 443
+      },
+      "detour": "shadowsocks-in"
+    },
+    {
+      // Shadowsocks-2022 AES-256 — bound only to localhost; never public.
+      // Upgraded from aes-128-gcm to aes-256-gcm for stronger key material
+      // under long-lived sessions in hostile networks. Password is a fresh
+      // 32-byte base64 value (AES-256 requires 32-byte keys).
+      "type": "shadowsocks",
+      "tag": "shadowsocks-in",
+      "listen": "127.0.0.1",
+      "listen_port": 8388,
+      "method": "2022-blake3-aes-256-gcm",
+      // SS-2022 multi-user (EIH) mode. `password` is the inbound-level server
+      // PSK (from .secrets.yaml shared.shadowsocks_password); `users[].password`
+      // entries are per-user PSKs. Clients concat as "<server>:<user>" in their
+      // outbound password field — sing-box splits, sends EIH headers to identify
+      // the user server-side. Per-user rotations inherit the 7-day grace window
+      // (kind=shadowsocks_users in .pending-rotations.yaml); rotating the server
+      // PSK is still atomic (no grace — every client must refetch together).
+      "password": "__SHADOWSOCKS_PASSWORD__",
+      "users": __USERS_SHADOWSOCKS__
+    },
+    {
+      // Hysteria2 — QUIC-based, masquerades as HTTP/3. Fast and CPU-cheap.
+      // salamander obfs randomises the QUIC packet header so UDP-flow
+      // classifiers (used in RU TSPU and IR DPI) can't match a hy2 signature.
+      // Self-signed cert with matching CN+SAN (set defaults.hy2.sni
+      // in profiles.yaml to control both). Clients pin the PEM (not
+      // insecure:true) — safe given shared-secret auth. The SAN is load-
+      // bearing: Go's crypto/tls (used by sing-box incl. iOS SFI) dropped
+      // CN hostname fallback in 1.15, and verifyHostname(ServerName) runs
+      // even on pinned certs. A cert with only CN would silently fail
+      // hy2 handshake client-side (no urltest latency sample). Regenerate
+      // with rotate-hy2-cert.sh — hand-rolled openssl commands are a
+      // known footgun here. See docs/hazards.md.
+      "type": "hysteria2",
+      "tag": "hy2-in",
+      // Bind to the secondary VNIC IP (substituted from INCOMING_IP_1
+      // at render time). Why bind explicitly: on hosts with multiple VNICs
+      // / multiple public IPs, a 0.0.0.0 listener accepts on any IP but the
+      // kernel chooses the egress source via the default route, so QUIC
+      // replies can leave from a *different* IP than the one the client
+      // dialed — clients discard those as a foreign 5-tuple ("no recent
+      // network activity"). TCP inbounds are immune because ESTABLISHED
+      // state keeps the reply on the same socket/IP. Single-VNIC hosts can
+      // bind 0.0.0.0 safely.
+      "listen": "__INCOMING_IP_1__",
+      "listen_port": 443,
+      // Advertised link capacity for brutal-CC pacing. These are the
+      // *server-side* hints — the envelope of what this uplink can sustain
+      // in real conditions. Clients combine their own up/down hints with
+      // the server's to set the brutal-CC pacer. Setting honest values
+      // here beats leaving them unset (defaults under-pace) and beats
+      // overstating (congestion collapse when the path can't deliver).
+      // sing-box has no per-user hy2 bandwidth caps — this is a global
+      // link hint, not enforcement (see docs/hazards.md).
+      "up_mbps": 500,
+      "down_mbps": 500,
+      // Users populated by render.py from profiles.yaml (user.hy2_password).
+      "users": __USERS_HY2__,
+      "obfs": {
+        "type": "salamander",
+        "password": "__HY2_OBFS_PASSWORD__"
+      },
+      "masquerade": "https://__HY2_SNI__",
+      "tls": {
+        "enabled": true,
+        "server_name": "__HY2_SNI__",
+        "alpn": ["h3"],
+        "certificate_path": "/etc/sing-box/hy2.crt",
+        "key_path": "/etc/sing-box/hy2.key"
+      }
+    },
+    {
+      // VLESS + Reality — sing-box-native Reality inbound. Both client and
+      // server in the same codebase keeps the handshake deterministic and
+      // gives Reality the consistent first-pick role in clients' ⚡ Fastest
+      // selectors.
+      //
+      // Bound to a secondary VNIC IP on TCP/443. :443 gives Reality the
+      // full SNI-fronting camouflage it's designed for — a probe to the IP
+      // on :443 completes a real TLS handshake to the configured cover host
+      // (via Reality's fallback to the handshake server), which is
+      // indistinguishable from an HTTPS-fronted service.
+      "type": "vless",
+      "tag": "reality-in",
+      // Endpoint A (INCOMING_IP_1) or B (INCOMING_IP_2): whichever
+      // holds the ACTIVE key (shared.reality_endpoint). rotate-realitykey.sh
+      // alternates between them so a key change is never a flag day.
+      "listen": "__REALITY_ACTIVE_LISTEN_IP__",
+      "listen_port": 443,
+      // Users populated by render.py from profiles.yaml. Naming convention:
+      // `<user>-<device.name>`. Auth is UUID + short_id (below); the name is
+      // an audit label only.
+      "users": __USERS_REALITY__,
+      "tls": {
+        "enabled": true,
+        // Reality handshake target: defaults.reality.handshake_sni from
+        // profiles.yaml. Pick a different cover host than the ShadowTLS +
+        // hy2 inbounds use so a single upstream change can't take down
+        // multiple inbounds at once.
+        //
+        // HARD REQUIREMENT: cover host MUST support TLS 1.3 — Reality
+        // embeds its auth in the TLS 1.3 handshake, so a TLS-1.2-only host
+        // breaks every connection. Many object-storage / static endpoints
+        // only negotiate TLS 1.2 — verify before pinning:
+        //   openssl s_client -tls1_3 -connect <host>:443 -servername <host>
+        "server_name": "__REALITY_HANDSHAKE_SNI__",
+        // Reality borrows a live TLS handshake from the target; clients
+        // that fail Reality auth are transparently forwarded there
+        // (fallback), so hostile probes see a real CA-signed cert from
+        // the cover host — indistinguishable from a plain HTTPS server.
+        "reality": {
+          "enabled": true,
+          "handshake": {
+            "server": "__REALITY_HANDSHAKE_SNI__",
+            "server_port": 443
+          },
+          // Reality X25519 private key — substituted from .secrets.yaml
+          // (shared.reality_private_key) by render.py, paired with
+          // shared.reality_public_key which clients embed. Rotate both
+          // together via rotate-reality-key.sh, never one at a time.
+          "private_key": "__REALITY_PRIVATE_KEY__",
+          // Short_ids populated by render.py from profiles.yaml
+          // (device.reality.short_id). Rotations are handled with a 7-day
+          // grace window: when a short_id changes in the manifest the old
+          // value stays here until clients fetch and switch over (tracked
+          // in .pending-rotations.yaml), then auto-expires.
+          "short_id": __SHORT_IDS_REALITY__
+        }
+      }
+    },
+    // During a keypair rotation render.py inserts `reality-retiring-in` here:
+    // the previous key on the other endpoint, until its overlap window ends.
+    __REALITY_RETIRING_INBOUND__
+    {
+      // VLESS + WebSocket — CDN-fronted fallback for clients on networks
+      // where the proxy IP is blackholed but Cloudflare's edges are still
+      // reachable (most RU TSPU, some CN scenarios). Traffic flow:
+      //   client → Cloudflare (TLS terminate, orange-cloud)
+      //          → reverse proxy (Traefik / Caddy / nginx with a real cert
+      //                           for defaults['ws-cf'].host, Host-match route)
+      //          → this inbound on 172.17.0.1:10001.
+      //
+      // Listener bound to 172.17.0.1 (docker0 bridge host-side IP) so the
+      // port is reachable from containers on any docker bridge (the reverse
+      // proxy reaches it through the host) but NOT from the public internet —
+      // :10001 never appears on the host's public IP. No TLS here; the
+      // reverse proxy terminates HTTPS in front, the VLESS+WS payload is
+      // plaintext over the bridge hop.
+      "type": "vless",
+      "tag": "ws-cf-in",
+      "listen": "172.17.0.1",
+      "listen_port": 10001,
+      // Users populated by render.py from profiles.yaml (user.ws_cf_uuid).
+      // One user per person — shared across that person's devices, since
+      // Cloudflare hides source-IP variance anyway.
+      "users": __USERS_WS_CF__,
+      // Accept smux-multiplexed VLESS streams. Older clients without
+      // multiplex still work — the field is an accept-all gate on the
+      // server side, not a mandate. NOTE: the renderer currently disables
+      // smux on the *client* ws-cf outbound by default (see frag_outbound_ws_cf
+      // in render.py and docs/hazards.md) because Cloudflare's WebSocket
+      // proxy interacts poorly with smux's binary framing. Leaving the
+      // server side enabled is harmless — it's purely permissive.
+      "multiplex": {
+        "enabled": true
+      },
+      "transport": {
+        // Path must match the client's wsSettings.path (/ws). Host header
+        // is not pinned server-side — Cloudflare rewrites it to the origin
+        // host anyway, and the reverse proxy in front routes purely on Host.
+        "type": "ws",
+        "path": "/ws"
+      }
+    }
+  ],
+  // Per-user accounting. sing-box's clash_api does not report which user a
+  // connection authenticated as, and the stock image is built without
+  // v2ray_api. So every user gets a direct outbound of their own
+  // ("user:<name>") and one route rule per credential name sends that
+  // user's traffic through it: the tag then shows in clash_api's `chains`
+  // (and the credential name in `rule`), which singbox-exporter turns into
+  // per-user byte counters. Behaviour is unchanged: all of them are plain
+  // direct outbounds, and `direct` stays first, so anything unmatched still
+  // leaves through it.
+  "outbounds": __OUTBOUNDS__,
+  "route": {
+    "rules": __USER_ROUTE_RULES__
+  },
+  // Server-side clash_api — bound to 127.0.0.1 only, never public. Used by
+  // the docker healthcheck (TCP probe on :9095) as a richer liveness signal
+  // than nc'ing an inbound port: clash_api binds late in sing-box init, so
+  // a wedged-mid-init process won't answer here. Secret is rendered from
+  // shared.server_clash_secret in .secrets.yaml (auto-generated). Port
+  // 9095 deliberately ≠ client clash_api port 9090 to avoid confusion.
+  "experimental": {
+    "clash_api": {
+      "external_controller": "127.0.0.1:9095",
+      "secret": "__SERVER_CLASH_SECRET__"
+    }
+  }
+}

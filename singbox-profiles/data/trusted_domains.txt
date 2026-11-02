@@ -1,0 +1,26 @@
+# Domains routed via the 🔒 Trusted selector — always tunneled,
+# never exposed to a Direct country alias regardless of the
+# user's 🚨 Restricted setting. One suffix per line; sing-box
+# matches them as `domain_suffix`. Blank lines and lines starting
+# with `#` are ignored.
+#
+# Bias: pick categories where leaking the destination over a
+# local hotile network is a real cost (account-takeover targets,
+# password vaults, banking). Don't add general-interest domains
+# here — that's what 🌍 Default is for.
+
+# Identity / password / SSO
+1password.com
+adobe.com
+apple.com
+icloud.com
+
+# Microsoft account + Office 365
+microsoft.com
+microsoftonline.com
+live.com
+office.com
+
+# Banking
+paypal.com
+wise.com

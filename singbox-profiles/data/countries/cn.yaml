@@ -1,0 +1,55 @@
+# China. GFW does both DNS hijack and active probing of TLS handshakes;
+# Reality + WS-CDN cover the two main survival paths.
+flag: 🇨🇳
+label: CN
+
+# DNS routing. Country-local DoH that resolves Cloudflare hostnames
+# truthfully and is reachable inside CN. dnspod is QQ/Tencent's; cheap +
+# fast on CN-Telecom/CN-Unicom/CN-Mobile.
+doh_tag: dnspod_doh
+doh_server: doh.pub
+
+# Bootstrap DNS for users physically in CN. 1.1.1.1 (the global default)
+# is DNS-hijacked by the GFW; Alibaba Public DNS is reachable inside CN,
+# fast, and resolves Cloudflare hostnames truthfully (used for the
+# pre-tunnel WS-CDN host lookup). Tradeoff: Alibaba sees the lookup
+# instead of Cloudflare, but CF edge IPs are heavily pooled so this
+# reveals little.
+bootstrap_dns: 223.5.5.5
+
+tld_suffixes: [cn]
+
+# Used as the DNS-routing matcher (→ dnspod_doh) and Restricted-route
+# matcher unless restricted_geosite overrides it.
+geosite: geosite-cn
+geoip: geoip-cn
+
+# Extra rule-set routed to 🌍 Default (bypassing the country selector) —
+# GFW-blocked sites that happen to have CN ccTLDs (e.g. google.com.hk)
+# must tunnel, not go Direct.
+blocked_ruleset:
+  tag: gfwlist-cn
+  url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/gfw.srs
+  update_interval: 7d
+
+rulesets:
+  - { tag: geosite-cn, url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs, update_interval: 7d }
+  - { tag: geoip-cn,   url: https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs,   update_interval: 7d }
+
+# Soft per-country protocol guidance. The renderer warns (not blocks)
+# when a user lists a protocol not in `recommended` for their country.
+# Notes explain operator nuance — leave a country's `recommended` to all
+# four if they all work, narrow only when one is reliably broken.
+protocols:
+  recommended: [reality, ws-cf, shadowtls, hy2]
+  # Country default for the 🔀 Proxy selector when a CN-only resident has no
+  # per-user `preferred_protocol` override. Reality is fastest when the
+  # proxy IP isn't actively blocked; users flip the selector to ws-cf or
+  # shadowtls in the dashboard if Reality breaks (manual escape hatch
+  # documented in docs/architecture.md selector-default section).
+  default: reality
+  notes: |
+    All four work. Reality is fastest when the proxy IP isn't actively
+    blocked; ws-cf through Cloudflare is the survival path when it is.
+    hy2 over UDP/443 is fast but the GFW periodically throttles sustained
+    QUIC flows.

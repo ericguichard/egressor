@@ -1,0 +1,301 @@
+{
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "ntp": {
+    "enabled": true,
+    "server": "pool.ntp.org",
+    "server_port": 123,
+    "interval": "30m"
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "bootstrap_dns",
+        "type": "udp",
+        "server": "223.5.5.5",
+        "server_port": 53,
+        "detour": "➡️ Direct"
+      },
+      {
+        "tag": "fakeip-server",
+        "type": "fakeip",
+        "inet4_range": "198.18.0.0/15"
+      },
+      {
+        "tag": "cloudflare_doh",
+        "type": "https",
+        "server": "1.1.1.1",
+        "server_port": 443,
+        "path": "/dns-query",
+        "detour": "🔀 Proxy"
+      }
+    ],
+    "rules": [
+      {
+        "domain": [
+          "vpnws.example.com"
+        ],
+        "server": "bootstrap_dns"
+      },
+      {
+        "rule_set": [
+          "hagezi-adblock"
+        ],
+        "action": "reject"
+      },
+      {
+        "query_type": [
+          "A",
+          "AAAA"
+        ],
+        "server": "fakeip-server"
+      },
+      {
+        "server": "cloudflare_doh"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "address": [
+        "172.16.0.1/30"
+      ],
+      "auto_route": true,
+      "strict_route": true,
+      "mtu": 1380,
+      "exclude_package": [
+        "com.example.softphone"
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "➡️ Direct",
+      "type": "direct",
+      "udp_fragment": false
+    },
+    {
+      "tag": "🇨🇳 CN",
+      "type": "direct"
+    },
+    {
+      "type": "vless",
+      "tag": "reality",
+      "server": "198.51.100.10",
+      "server_port": 443,
+      "uuid": "00000000-0000-4000-8000-000000000201",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "console.example.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "safari"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "TEST_REALITY_PUBLIC_KEY_______________________",
+          "short_id": "0201020102010201"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "ws-cf",
+      "server": "vpnws.example.com",
+      "server_port": 443,
+      "uuid": "00000000-0000-4000-8000-000000000002",
+      "domain_resolver": "bootstrap_dns",
+      "packet_encoding": "xudp",
+      "tls": {
+        "enabled": true,
+        "server_name": "vpnws.example.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "safari"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/ws",
+        "headers": {
+          "Host": "vpnws.example.com"
+        }
+      }
+    },
+    {
+      "tag": "🔀 Proxy",
+      "type": "selector",
+      "outbounds": [
+        "reality",
+        "ws-cf"
+      ],
+      "default": "reality"
+    },
+    {
+      "tag": "🌍 Default",
+      "type": "selector",
+      "outbounds": [
+        "🔀 Proxy",
+        "➡️ Direct"
+      ],
+      "default": "🔀 Proxy"
+    },
+    {
+      "tag": "🔒 Trusted",
+      "type": "selector",
+      "outbounds": [
+        "🔀 Proxy",
+        "🌍 Default"
+      ],
+      "default": "🔀 Proxy"
+    },
+    {
+      "tag": "🚨 Restricted",
+      "type": "selector",
+      "outbounds": [
+        "🌍 Default",
+        "🇨🇳 CN"
+      ],
+      "default": "🇨🇳 CN"
+    }
+  ],
+  "route": {
+    "auto_detect_interface": true,
+    "default_domain_resolver": "cloudflare_doh",
+    "final": "🔀 Proxy",
+    "rule_set": [
+      {
+        "tag": "hagezi-adblock",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/razaxq/dns-blocklists-sing-box@rule-set/hagezi-pro.srs",
+        "update_interval": "12h"
+      },
+      {
+        "tag": "geosite-cn",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
+        "update_interval": "7d"
+      },
+      {
+        "tag": "geoip-cn",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+        "update_interval": "7d"
+      },
+      {
+        "tag": "gfwlist-cn",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/gfw.srs",
+        "update_interval": "7d"
+      }
+    ],
+    "rules": [
+      {
+        "port": 53,
+        "action": "hijack-dns"
+      },
+      {
+        "inbound": "tun-in",
+        "action": "sniff"
+      },
+      {
+        "domain": [
+          "sip.example.com"
+        ],
+        "port_range": [
+          "5061:5061",
+          "10000:10100"
+        ],
+        "outbound": "➡️ Direct"
+      },
+      {
+        "ip_cidr": [
+          "192.0.2.25/32"
+        ],
+        "port_range": [
+          "5061:5061",
+          "10000:10100"
+        ],
+        "outbound": "➡️ Direct"
+      },
+      {
+        "package_name": [
+          "com.example.softphone"
+        ],
+        "outbound": "➡️ Direct"
+      },
+      {
+        "network": "udp",
+        "port": 443,
+        "action": "reject"
+      },
+      {
+        "network": "tcp",
+        "port": 853,
+        "action": "reject"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "➡️ Direct"
+      },
+      {
+        "domain_suffix": [
+          "local",
+          "lan"
+        ],
+        "outbound": "➡️ Direct"
+      },
+      {
+        "domain_suffix": [
+          "1password.com",
+          "adobe.com",
+          "apple.com",
+          "icloud.com",
+          "microsoft.com",
+          "microsoftonline.com",
+          "live.com",
+          "office.com",
+          "paypal.com",
+          "wise.com"
+        ],
+        "outbound": "🔒 Trusted"
+      },
+      {
+        "rule_set": [
+          "gfwlist-cn"
+        ],
+        "outbound": "🌍 Default"
+      },
+      {
+        "rule_set": [
+          "geosite-cn",
+          "geoip-cn"
+        ],
+        "outbound": "🚨 Restricted"
+      }
+    ],
+    "default_http_client": "rule-set-fetch"
+  },
+  "http_clients": [
+    {
+      "tag": "rule-set-fetch",
+      "detour": "🔀 Proxy"
+    }
+  ],
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "path": "cache.db",
+      "store_fakeip": true
+    }
+  }
+}

@@ -1,0 +1,482 @@
+{
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "ntp": {
+    "enabled": true,
+    "server": "pool.ntp.org",
+    "server_port": 123,
+    "interval": "30m"
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "bootstrap_dns",
+        "type": "udp",
+        "server": "1.1.1.1",
+        "server_port": 53,
+        "detour": "➡️ Direct"
+      },
+      {
+        "tag": "fakeip-server",
+        "type": "fakeip",
+        "inet4_range": "198.18.0.0/15"
+      },
+      {
+        "tag": "cloudflare_doh",
+        "type": "https",
+        "server": "1.1.1.1",
+        "server_port": 443,
+        "path": "/dns-query",
+        "detour": "🌍 Default"
+      }
+    ],
+    "rules": [
+      {
+        "domain": [
+          "vpnws.example.com",
+          "home.example.test"
+        ],
+        "server": "bootstrap_dns"
+      },
+      {
+        "rule_set": [
+          "hagezi-adblock",
+          "iran-malware",
+          "iran-phishing",
+          "iran-ads"
+        ],
+        "action": "reject"
+      },
+      {
+        "query_type": [
+          "A",
+          "AAAA"
+        ],
+        "server": "fakeip-server"
+      },
+      {
+        "server": "cloudflare_doh"
+      }
+    ]
+  },
+  "endpoints": [
+    {
+      "type": "wireguard",
+      "tag": "🏢 Home",
+      "detour": "ws-cf",
+      "mtu": 1280,
+      "address": [
+        "10.10.0.2/24"
+      ],
+      "private_key": "TEST_WG_PRIV_PIXEL=====================================",
+      "peers": [
+        {
+          "address": "home.example.test",
+          "port": 51820,
+          "public_key": "TEST_WG_PEER_PUBLIC_KEY==================================",
+          "allowed_ips": [
+            "0.0.0.0/0",
+            "::/0"
+          ],
+          "persistent_keepalive_interval": 25
+        }
+      ]
+    },
+    {
+      "type": "tailscale",
+      "tag": "🧵 Tailscale",
+      "state_directory": "tailscale",
+      "auth_key": "tskey-auth-TESTFIXTURE0000000000000000",
+      "hostname": "test_alice-mobile",
+      "detour": "➡️ Direct"
+    }
+  ],
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "address": [
+        "172.16.0.1/30"
+      ],
+      "auto_route": true,
+      "strict_route": true,
+      "mtu": 1380,
+      "exclude_package": [
+        "com.example.softphone"
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "➡️ Direct",
+      "type": "direct",
+      "udp_fragment": false
+    },
+    {
+      "tag": "🇨🇳 CN",
+      "type": "direct"
+    },
+    {
+      "tag": "🇷🇺 RU",
+      "type": "direct"
+    },
+    {
+      "tag": "🇮🇷 IR",
+      "type": "direct"
+    },
+    {
+      "type": "vless",
+      "tag": "ws-cf",
+      "server": "vpnws.example.com",
+      "server_port": 443,
+      "uuid": "00000000-0000-4000-8000-000000000001",
+      "domain_resolver": "bootstrap_dns",
+      "packet_encoding": "xudp",
+      "tls": {
+        "enabled": true,
+        "server_name": "vpnws.example.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/ws",
+        "headers": {
+          "Host": "vpnws.example.com"
+        }
+      }
+    },
+    {
+      "tag": "🔀 Proxy",
+      "type": "selector",
+      "outbounds": [
+        "ws-cf"
+      ],
+      "default": "ws-cf"
+    },
+    {
+      "tag": "🌍 Default",
+      "type": "selector",
+      "outbounds": [
+        "🔀 Proxy",
+        "🏢 Home",
+        "➡️ Direct"
+      ],
+      "default": "🔀 Proxy"
+    },
+    {
+      "tag": "🔗 Tailnet",
+      "type": "selector",
+      "outbounds": [
+        "🧵 Tailscale",
+        "🔀 Proxy",
+        "➡️ Direct"
+      ],
+      "default": "🔀 Proxy"
+    },
+    {
+      "tag": "🏠 Home Sites",
+      "type": "selector",
+      "outbounds": [
+        "🌍 Default",
+        "🏢 Home",
+        "➡️ Direct"
+      ],
+      "default": "🏢 Home"
+    },
+    {
+      "tag": "🔒 Trusted",
+      "type": "selector",
+      "outbounds": [
+        "🔀 Proxy",
+        "🌍 Default"
+      ],
+      "default": "🔀 Proxy"
+    },
+    {
+      "tag": "🚨 Restricted",
+      "type": "selector",
+      "outbounds": [
+        "🌍 Default",
+        "🇨🇳 CN",
+        "🇷🇺 RU",
+        "🇮🇷 IR"
+      ],
+      "default": "🌍 Default"
+    }
+  ],
+  "route": {
+    "auto_detect_interface": true,
+    "default_domain_resolver": "cloudflare_doh",
+    "final": "🌍 Default",
+    "rule_set": [
+      {
+        "tag": "hagezi-adblock",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/razaxq/dns-blocklists-sing-box@rule-set/hagezi-pro.srs",
+        "update_interval": "12h"
+      },
+      {
+        "tag": "geosite-cn",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
+        "update_interval": "7d"
+      },
+      {
+        "tag": "geoip-cn",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+        "update_interval": "7d"
+      },
+      {
+        "tag": "gfwlist-cn",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/gfw.srs",
+        "update_interval": "7d"
+      },
+      {
+        "tag": "geosite-ru",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/runetfreedom/russia-v2ray-rules-dat@release/sing-box/rule-set-geosite/geosite-category-ru.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "geoip-ru",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/runetfreedom/russia-v2ray-rules-dat@release/sing-box/rule-set-geoip/geoip-ru.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "ru-available-only-inside",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/runetfreedom/russia-v2ray-rules-dat@release/sing-box/rule-set-geosite/geosite-ru-available-only-inside.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "geosite-ru-blocked",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/runetfreedom/russia-v2ray-rules-dat@release/sing-box/rule-set-geosite/geosite-ru-blocked.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "geosite-ir",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@rule-set/geosite-ir.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "geoip-ir",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@rule-set/geoip-ir.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "iran-malware",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@rule-set/geosite-malware.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "iran-phishing",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@rule-set/geosite-phishing.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "iran-ads",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@rule-set/geosite-category-ads-all.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "geoip-it",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-it.srs",
+        "update_interval": "7d"
+      },
+      {
+        "tag": "geoip-fr",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-fr.srs",
+        "update_interval": "7d"
+      },
+      {
+        "tag": "geoip-gb",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-gb.srs",
+        "update_interval": "7d"
+      }
+    ],
+    "rules": [
+      {
+        "port": 53,
+        "action": "hijack-dns"
+      },
+      {
+        "inbound": "tun-in",
+        "action": "sniff"
+      },
+      {
+        "domain": [
+          "sip.example.com"
+        ],
+        "port_range": [
+          "5061:5061",
+          "10000:10100"
+        ],
+        "outbound": "➡️ Direct"
+      },
+      {
+        "ip_cidr": [
+          "192.0.2.25/32"
+        ],
+        "port_range": [
+          "5061:5061",
+          "10000:10100"
+        ],
+        "outbound": "➡️ Direct"
+      },
+      {
+        "package_name": [
+          "com.example.softphone"
+        ],
+        "outbound": "➡️ Direct"
+      },
+      {
+        "ip_cidr": [
+          "100.64.0.0/10"
+        ],
+        "outbound": "🔗 Tailnet"
+      },
+      {
+        "inbound": [
+          "🧵 Tailscale"
+        ],
+        "network": "tcp",
+        "port": 22,
+        "action": "route",
+        "outbound": "➡️ Direct",
+        "override_address": "127.0.0.1",
+        "override_port": 8022
+      },
+      {
+        "inbound": [
+          "🧵 Tailscale"
+        ],
+        "action": "reject"
+      },
+      {
+        "network": "udp",
+        "port": 443,
+        "action": "reject"
+      },
+      {
+        "network": "tcp",
+        "port": 853,
+        "action": "reject"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "➡️ Direct"
+      },
+      {
+        "domain_suffix": [
+          "local",
+          "lan"
+        ],
+        "outbound": "➡️ Direct"
+      },
+      {
+        "port": 22,
+        "outbound": "➡️ Direct"
+      },
+      {
+        "domain_suffix": [
+          "1password.com",
+          "adobe.com",
+          "apple.com",
+          "icloud.com",
+          "microsoft.com",
+          "microsoftonline.com",
+          "live.com",
+          "office.com",
+          "paypal.com",
+          "wise.com"
+        ],
+        "outbound": "🔒 Trusted"
+      },
+      {
+        "rule_set": [
+          "geoip-it",
+          "geoip-fr",
+          "geoip-gb"
+        ],
+        "outbound": "🏠 Home Sites"
+      },
+      {
+        "domain_suffix": [
+          "it",
+          "fr",
+          "uk",
+          "eu"
+        ],
+        "outbound": "🏠 Home Sites"
+      },
+      {
+        "rule_set": [
+          "gfwlist-cn",
+          "geosite-ru-blocked"
+        ],
+        "outbound": "🌍 Default"
+      },
+      {
+        "rule_set": [
+          "geosite-cn",
+          "geoip-cn"
+        ],
+        "outbound": "🚨 Restricted"
+      },
+      {
+        "rule_set": [
+          "ru-available-only-inside",
+          "geoip-ru"
+        ],
+        "outbound": "🚨 Restricted"
+      },
+      {
+        "rule_set": [
+          "geosite-ir",
+          "geoip-ir"
+        ],
+        "outbound": "🚨 Restricted"
+      }
+    ]
+  },
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "path": "cache.db",
+      "store_fakeip": true
+    }
+  }
+}

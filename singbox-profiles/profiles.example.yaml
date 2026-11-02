@@ -1,0 +1,175 @@
+# Egressor example manifest. Copy to profiles.yaml and edit; render.py reads
+# profiles.yaml + .secrets.yaml + home_wg/*.conf and emits per-device sing-box
+# configs. Credentials live in .secrets.yaml (auto-managed); WG identities
+# live in home_wg/<user>-<device>.conf (one per home-egress device).
+#
+# Three archetypes are shown here, each exercising a different render path:
+#   - alice : admin traveller, every protocol, multi-country, home_wg egress
+#   - bob   : single-country resident, two protocols, no home_wg
+#   - dave : single-country resident with a per-user ShadowTLS SNI override
+
+defaults:
+  # uTLS fingerprint applied to every TLS handshake unless a user overrides
+  # it. Spreading fingerprints across users helps make JA3/JA4 hashes look
+  # like "different households" rather than one signature.
+  utls_fingerprint: chrome
+
+  reality:
+    # Public IP of your sing-box server (the address Reality clients dial).
+    # If you anticipate rotating this IP, you can write the literal token
+    # `__VNIC_SECONDARY_PUBLIC_IP__` here and define VNIC_SECONDARY_PUBLIC_IP
+    # in <repo>/.env — render.py substitutes at load time, so rotation is a
+    # one-line .env edit + ./render.py -y. Same pattern is supported in
+    # `proxy_server_ips` and in .secrets.yaml's `awg.endpoint_host`
+    # (placeholder there is __VNIC_PRIMARY_PUBLIC_IP__).
+    server: 203.0.113.10
+    # Optional second Reality endpoint, for keypair rotation WITHOUT a flag
+    # day. A Reality inbound holds one private key, so rotate-realitykey.sh
+    # starts the new key on the other endpoint and keeps the previous key on
+    # the current one for an overlap window (REALITY_OVERLAP_DAYS, default
+    # 7). Needs a second public IP on the server, bound locally via
+    # INCOMING_IP_2 in <repo>/.env. Only Reality alternates; ShadowTLS
+    # and hy2 keep using `server`. Add that IP to `proxy_server_ips` too.
+    # server_b: 198.51.100.20     # or __REALITY_B_PUBLIC_IP__ (from .env)
+    server_port: 443
+    # Reality "handshake" SNI — the cover host whose TLS handshake Reality
+    # borrows. MUST support TLS 1.3 (Reality embeds its auth in the TLS 1.3
+    # handshake; a TLS-1.2-only host fails every connection). Verify with:
+    #   openssl s_client -tls1_3 -connect <host>:443 -servername <host>
+    # Pick a real, busy, allowed-everywhere site that's plausibly reachable
+    # from your VPS (e.g. a major cloud provider's console / docs domain).
+    handshake_sni: console.example.com
+    flow: xtls-rprx-vision
+
+  ws-cf:
+    # The Cloudflare-fronted hostname that fronts your WebSocket inbound.
+    # Point a DNS A record at Cloudflare's edge with proxy ON; Cloudflare
+    # terminates TLS for you and forwards to your origin via HTTP.
+    host: vpnws.example.com
+    path: /ws
+    port: 443
+
+  shadowtls:
+    # ShadowTLS v3 listens on a distinct TCP port (NOT :443 — Reality has
+    # that). The port is otherwise arbitrary; pick one not already used.
+    server_port: 8443
+    version: 3
+    # Default ShadowTLS handshake SNI. Per-user override available via
+    # users.<name>.shadowtls_sni. When sni_pool is set the renderer hashes
+    # the username into the pool for stable per-user assignment.
+    # NOTE: the override is keyed on the USER, not the device — render.py
+    # resolves it as user.get('shadowtls_sni') with no device argument.
+    # A user who owns both a mobile and a desktop therefore pulls that
+    # desktop off the pool as well, and it loses the per-user DPI
+    # decorrelation the pool exists to provide. Only users with no
+    # override at all stay on the pool.
+    sni: cloud.example.com
+    # sni_pool: [docs.example.com, console.example.com, cloud.example.com]
+    shadowsocks_method: 2022-blake3-aes-256-gcm
+
+  hy2:
+    # Hysteria2 binds UDP/443 (QUIC cover port). The cert SAN must match
+    # this hostname. Generate with `singbox-server/rotate-hy2-cert.sh`.
+    server_port: 443
+    sni: cloud.example.com
+    # Optional: enable port-hopping for clients (recommended for CN
+    # users — see docs/hazards.md "hy2 UDP/443 IP-marking"). When set,
+    # clients dial random ports from this range instead of server_port,
+    # spreading volume so no single 5-tuple flow trips the GFW's per-IP
+    # heavy-UDP heuristic. Server still listens on server_port; a host
+    # iptables redirect (set up via singbox-server/setup-hy2-port-hop.sh)
+    # collapses the range back to that single port. Open the same UDP
+    # range in your cloud firewall.
+    # server_ports: ["20000:30000"]
+
+  # Optional: list of /32 CIDRs that should always route Direct from a
+  # client. Useful when your server has multiple public IPs (or you run
+  # multiple servers) and you want to avoid TUN hairpin loops on hy2's
+  # outer QUIC. Single-host deployments can leave this empty.
+  # proxy_server_ips:
+  #   - 203.0.113.10/32
+  #   - 203.0.113.11/32
+
+  # Optional SIP hub bypass: if a SIP PBX (Asterisk etc.) runs on the SAME host
+  # as the proxy, a tunnelled softphone gets one-way/no audio — a proxy does not
+  # relay UDP back to its own host. Send only the PBX's SIP + RTP ports Direct
+  # (everything else to that host keeps tunnelling). hosts: BOTH the registrar
+  # hostname (signalling is dialled by name -> fake-IP -> only a domain rule
+  # matches) and its literal IP (media goes to the IP in the SDP); one rule is
+  # emitted per entry. port_ranges: "start:end" strings, ORed.
+  # sip_hub:
+  #   hosts: [sip.example.com, __VNIC_PRIMARY_PUBLIC_IP__]
+  #   port_ranges: ["5061:5061", "10000:10100"]
+  #   android_packages: [com.counterpath.bria]   # mobile only: the whole softphone app goes Direct
+
+users:
+
+  # ────────────────────────────────────────────────────────────────────
+  # alice — admin traveller. Multi-country (CN+RU+IR), all 4 protocols,
+  # home-egress via WireGuard for IT/FR/UK traffic, and admin SSH bypass.
+  # Drop home_wg/alice-pixel.conf and home_wg/alice-laptop.conf alongside
+  # this file (one .conf per device with a `home:` block).
+  # ────────────────────────────────────────────────────────────────────
+  alice:
+    countries: [cn, ru, ir]
+    protocols: [reality, ws-cf, shadowtls, hy2]
+    utls_fingerprint: chrome
+    admin: true
+    home:
+      country: it
+      home_egress_countries: [it, fr, uk]
+      home_egress_tlds: [eu]
+    devices:
+      # type ∈ {mobile, windows, mac, linux}; at most one device per type per
+      # user (the served filename is keyed on user+type). mac = macOS running
+      # SFM (installed via Homebrew/GitHub releases): mobile-shaped config, no
+      # Windows installer/updater, no NTP block, no per-protocol solo files.
+      # linux = a Linux desktop running the CLI sing-box under systemd:
+      # windows-shaped config (clash_api dashboard; the hourly config timer
+      # fetches through 🔀 Proxy), installed by the generated install-singbox.sh
+      # (distro package on Arch, GitHub release tarball elsewhere).
+      # Optional per-device `tailscale: true` (requires user-level
+      # tailnet: true): embeds a native Tailscale node inside sing-box
+      # (no second VPN slot needed — the Android use case). Needs an
+      # operator-minted tailscale_auth_key in .secrets.yaml under the
+      # device. Makes 🧵 Tailscale the 🔗 Tailnet selector default and
+      # exposes local ssh (port 22 → Termux sshd) to tailnet peers.
+      # Optional per-device `core_min: '1.14'`: the oldest sing-box core the
+      # device runs. Fields a newer core needs are emitted only at or above
+      # the version that added them, because an older core refuses the whole
+      # config ("unknown field"). Default: 1.14 for mobile, 1.13 for the
+      # desktop types. Raise a desktop once it is on 1.14; lower a phone that
+      # is stuck on an older app.
+      - { type: mobile,  name: pixel }
+      - { type: windows, name: laptop }
+      - { type: mac,     name: macbook }
+      # - { type: linux,   name: workstation }
+
+  # ────────────────────────────────────────────────────────────────────
+  # bob — single-country resident, two protocols. Lives in CN, doesn't
+  # travel. Restricted defaults to the country-flag Direct so local sites
+  # (baidu, etc.) don't tunnel.
+  # ────────────────────────────────────────────────────────────────────
+  bob:
+    countries: [cn]
+    protocols: [reality, ws-cf]
+    utls_fingerprint: safari
+    devices:
+      - { type: mobile, name: iphone }
+
+  # ────────────────────────────────────────────────────────────────────
+  # dave — single-country resident on Windows + mobile. Demonstrates
+  # the per-user ShadowTLS SNI override (useful when a pool member becomes
+  # unreliable, or to pin a user to a specific cover for debugging).
+  # ────────────────────────────────────────────────────────────────────
+  dave:
+    countries: [ru]
+    protocols: [reality, shadowtls]
+    utls_fingerprint: firefox
+    # dave shows the mixed-device case: this override applies to BOTH
+    # devices below, so his pc leaves the sni_pool along with his iphone.
+    # Set the override only when the mobile breakage is worth that cost.
+    shadowtls_sni: docs.example.com
+    devices:
+      - { type: mobile,  name: iphone }
+      - { type: windows, name: pc }

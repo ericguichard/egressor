@@ -1,0 +1,28 @@
+# wg-quick + AmneziaWG fields, client perspective. One Peer (the awg-server).
+# Rendered by render.py per AWG-enabled user. Imported into the Amnezia VPN
+# app — sing-box does not consume this file (AWG never rides in the sing-box
+# profile; the two-app split is intentional, see docs/architecture.md).
+#
+# All Jc/Jmin/Jmax/S1/S2/H1-H4 values must match the awg-server side EXACTLY
+# — one mismatched octet silently times out (by design of AWG; resists active
+# probing). On rotation: re-render and redistribute every client's .conf.
+[Interface]
+PrivateKey = __USER_PRIVATE_KEY__
+Address = __USER_ADDRESS__
+DNS = 1.1.1.1
+MTU = 1420
+Jc = __AWG_JC__
+Jmin = __AWG_JMIN__
+Jmax = __AWG_JMAX__
+S1 = __AWG_S1__
+S2 = __AWG_S2__
+H1 = __AWG_H1__
+H2 = __AWG_H2__
+H3 = __AWG_H3__
+H4 = __AWG_H4__
+
+[Peer]
+PublicKey = __SERVER_PUBLIC_KEY__
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = __SERVER_HOST__:__AWG_PORT__
+PersistentKeepalive = 25

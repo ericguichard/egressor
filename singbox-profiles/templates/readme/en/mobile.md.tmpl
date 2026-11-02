@@ -1,0 +1,27 @@
+## Mobile (Android / iOS)
+
+### Step 1 — Install sing-box
+
+The official sing-box client. **Do not use Hiddify-Next** — it wraps imported
+profiles in its own auto-switcher, defeating the country-derived default this
+profile is built around (see Troubleshooting below).
+
+- **Android (Play Store)** — [io.nekohasekai.sfa](https://play.google.com/store/apps/details?id=io.nekohasekai.sfa) — free.
+- **iOS** — App Store listings keep disappearing (the original sing-box was delisted in 2024; its successor "sing-box VT" was delisted around 2026-07). The current official channel is the **sing-box VT TestFlight beta** (invite-gated: ask the admin). If neither is available to you, use an alternate client with a per-protocol profile — see *"If you can't install sing-box"* below.
+- **Android (sideload)** — [SagerNet/sing-box-for-android releases](https://github.com/SagerNet/sing-box-for-android/releases). Download the APK, verify the SHA256 listed in the GitHub release notes against `sha256sum sing-box-android-*.apk` before installing. Use this only when the Play Store is unavailable in your region.
+
+### Step 2 — Import the profile
+
+**Recommended — remote profile URL (auto-updates):**
+
+__MOBILE_URL_BLOCK__
+
+In the sing-box app: **Profiles** → **+** → **Type: Remote** → paste the URL → **Auto Update: 60 min** → **Save**.
+The app fetches the config, validates it, reloads live. On server-side changes the phone picks up the new config on its next poll.
+
+The URL itself is the credential (128-bit random path). Treat like any other sensitive string.
+
+**Fallback methods** (if the URL is unreachable from your local network):
+- **Local file import** — get the `.json` from admin via AirDrop / iCloud / Google Drive / email, then in the app: Profiles → + → Import from file.
+- **URL import (one-off)** — host the file on any reachable URL, then Profiles → + → Import from URL.
+__ALTERNATE_SECTION__

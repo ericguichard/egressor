@@ -1,0 +1,55 @@
+## Linux setup
+
+Runs as a systemd service (`sing-box.service`), config auto-updates hourly via a systemd timer, service restarts automatically on config change. On **Arch Linux** the sing-box binary comes from the official repos (`extra/sing-box`) and is upgraded by pacman like any other package; on other distros the installer fetches the release tarball and the updater keeps it on the server-published version.
+
+### Install (one command, needs sudo)
+
+```bash
+curl -fsSL https://__PROFILE_HOST__/p/__SECRET__/install-singbox.sh -o /tmp/sb.sh && sudo bash /tmp/sb.sh
+```
+
+What it does automatically:
+- Installs sing-box (`pacman -S sing-box` on Arch; GitHub release tarball elsewhere).
+- Fetches + validates the latest `__LINUX_FILENAME__` from the server into `/etc/sing-box/config.json`.
+- Enables `sing-box.service` (auto-starts at boot, restarts on crash; runs as the unprivileged `sing-box` user).
+- Registers `egressor-update.timer`, which pulls config updates every hour (and 2 min after each boot).
+
+Re-running the same one-liner is safe — works as upgrade / repair. Do **not** run another VPN client (Amnezia, a WireGuard tunnel, a second sing-box) at the same time: both want the default route and the loser silently breaks.
+
+### Dashboard — `http://127.0.0.1:9090/ui`
+
+Loopback-only (not reachable from your LAN). First time open, paste API secret:
+
+```
+__CLASH_SECRET__
+```
+
+Leave API Base URL at `http://127.0.0.1:9090`. Browser caches the secret in localStorage after that.
+
+### Common operations
+
+```bash
+# Is the service running?
+systemctl status sing-box
+
+# Follow sing-box's own log
+journalctl -u sing-box -f
+
+# Force an immediate config check (normally hourly)
+sudo systemctl start egressor-update.service
+
+# Updater log / next scheduled run
+journalctl -u egressor-update -n 30
+systemctl list-timers egressor-update.timer
+
+# Stop / start the VPN by hand (the timer keeps running either way)
+sudo systemctl stop sing-box
+sudo systemctl start sing-box
+
+# Remove everything (config, updater, timer); the sing-box package stays
+sudo systemctl disable --now egressor-update.timer sing-box
+sudo rm -rf /etc/egressor /usr/local/lib/egressor /var/lib/egressor \
+  /etc/systemd/system/egressor-update.{service,timer} /etc/sing-box/config.json*
+```
+
+If the service refuses to start right after an update, the updater has already rolled back to the previous config (`/etc/sing-box/config.json.prev`) and kept the rejected one as `config.json.rejected` — tell the admin.

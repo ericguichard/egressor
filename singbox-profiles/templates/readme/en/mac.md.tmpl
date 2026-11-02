@@ -1,0 +1,22 @@
+## Mac (macOS)
+
+### Step 1: Install sing-box (SFM)
+
+The Mac App Store has no sing-box listing; install the official app one of these ways:
+
+- **Homebrew** (recommended): `brew install sfm` in Terminal. No Homebrew yet? Install it first from [brew.sh](https://brew.sh).
+- **Standalone app**: download `SFM.dmg` from [SagerNet/sing-box releases](https://github.com/SagerNet/sing-box/releases), open it and drag SFM to Applications.
+
+First launch: approve the system prompt to add the VPN configuration (macOS asks once).
+
+### Step 2: Import the profile
+
+**Remote profile URL (auto-updates):**
+
+__MAC_URL_BLOCK__
+
+In SFM: **Profiles** → **New Profile** → **Type: Remote** → paste the URL → **Auto Update: 60 min** → **Create**. Select the profile, then toggle the VPN on from the Dashboard tab (or the menu-bar icon).
+
+The URL itself is the credential (128-bit random path). Treat it like any other sensitive string.
+
+The dashboard with the selector groups (🔀 Proxy, 🚨 Restricted, ...) lives in the app's **Groups** tab; behavior is identical to the mobile client described above.

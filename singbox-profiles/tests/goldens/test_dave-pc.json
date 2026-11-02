@@ -1,0 +1,354 @@
+{
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "bootstrap_dns",
+        "type": "udp",
+        "server": "1.1.1.1",
+        "server_port": 53,
+        "detour": "➡️ Direct"
+      },
+      {
+        "tag": "fakeip-server",
+        "type": "fakeip",
+        "inet4_range": "198.18.0.0/15"
+      },
+      {
+        "tag": "cloudflare_doh",
+        "type": "https",
+        "server": "1.1.1.1",
+        "server_port": 443,
+        "path": "/dns-query",
+        "detour": "🌍 Default"
+      }
+    ],
+    "rules": [
+      {
+        "rule_set": [
+          "hagezi-tif",
+          "hagezi-adblock",
+          "iran-malware",
+          "iran-phishing",
+          "iran-ads"
+        ],
+        "action": "reject"
+      },
+      {
+        "query_type": [
+          "A",
+          "AAAA"
+        ],
+        "server": "fakeip-server"
+      },
+      {
+        "server": "cloudflare_doh"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "address": [
+        "172.16.0.1/30"
+      ],
+      "auto_route": true,
+      "strict_route": true,
+      "mtu": 1380,
+      "interface_name": "singbox-tun0"
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "➡️ Direct",
+      "type": "direct",
+      "udp_fragment": false
+    },
+    {
+      "tag": "🇷🇺 RU",
+      "type": "direct"
+    },
+    {
+      "tag": "🇮🇷 IR",
+      "type": "direct"
+    },
+    {
+      "type": "vless",
+      "tag": "reality",
+      "server": "198.51.100.10",
+      "server_port": 443,
+      "uuid": "00000000-0000-4000-8000-000000000301",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "console.example.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "firefox"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "TEST_REALITY_PUBLIC_KEY_______________________",
+          "short_id": "0301030103010301"
+        }
+      }
+    },
+    {
+      "type": "hysteria2",
+      "tag": "hy2",
+      "server": "198.51.100.10",
+      "password": "TEST_HY2_PW_DAVE_____",
+      "up_mbps": 30,
+      "down_mbps": 200,
+      "obfs": {
+        "type": "salamander",
+        "password": "TEST_SALAMANDER_16B="
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "cloud.example.com",
+        "alpn": [
+          "h3"
+        ],
+        "certificate_public_key_sha256": [
+          "HpT2YC14IauD/RBwK3uTV2R9n89T26aBSHxWl0A9Qvw=",
+          "52cQF4IC7imyQ7YpCXIgPU3LOnS6C9y/0nRXhB5f6fs="
+        ]
+      },
+      "server_port": 443
+    },
+    {
+      "tag": "🔀 Proxy",
+      "type": "selector",
+      "outbounds": [
+        "reality",
+        "hy2"
+      ],
+      "default": "hy2"
+    },
+    {
+      "tag": "🌍 Default",
+      "type": "selector",
+      "outbounds": [
+        "🔀 Proxy",
+        "➡️ Direct"
+      ],
+      "default": "🔀 Proxy"
+    },
+    {
+      "tag": "🔒 Trusted",
+      "type": "selector",
+      "outbounds": [
+        "🔀 Proxy",
+        "🌍 Default"
+      ],
+      "default": "🔀 Proxy"
+    },
+    {
+      "tag": "🚨 Restricted",
+      "type": "selector",
+      "outbounds": [
+        "🌍 Default",
+        "🇷🇺 RU",
+        "🇮🇷 IR"
+      ],
+      "default": "🌍 Default"
+    }
+  ],
+  "route": {
+    "auto_detect_interface": true,
+    "default_domain_resolver": "cloudflare_doh",
+    "final": "🌍 Default",
+    "rule_set": [
+      {
+        "tag": "hagezi-tif",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/razaxq/dns-blocklists-sing-box@rule-set/hagezi-tif.srs",
+        "update_interval": "6h"
+      },
+      {
+        "tag": "hagezi-adblock",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/razaxq/dns-blocklists-sing-box@rule-set/hagezi-pro.srs",
+        "update_interval": "12h"
+      },
+      {
+        "tag": "geosite-ru",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/runetfreedom/russia-v2ray-rules-dat@release/sing-box/rule-set-geosite/geosite-category-ru.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "geoip-ru",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/runetfreedom/russia-v2ray-rules-dat@release/sing-box/rule-set-geoip/geoip-ru.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "ru-available-only-inside",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/runetfreedom/russia-v2ray-rules-dat@release/sing-box/rule-set-geosite/geosite-ru-available-only-inside.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "geosite-ru-blocked",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/runetfreedom/russia-v2ray-rules-dat@release/sing-box/rule-set-geosite/geosite-ru-blocked.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "geosite-ir",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@rule-set/geosite-ir.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "geoip-ir",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@rule-set/geoip-ir.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "iran-malware",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@rule-set/geosite-malware.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "iran-phishing",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@rule-set/geosite-phishing.srs",
+        "update_interval": "1d"
+      },
+      {
+        "tag": "iran-ads",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@rule-set/geosite-category-ads-all.srs",
+        "update_interval": "1d"
+      }
+    ],
+    "rules": [
+      {
+        "port": 53,
+        "action": "hijack-dns"
+      },
+      {
+        "inbound": "tun-in",
+        "action": "sniff"
+      },
+      {
+        "domain": [
+          "vpn.example.com"
+        ],
+        "network": "udp",
+        "port": 51820,
+        "outbound": "➡️ Direct"
+      },
+      {
+        "domain": [
+          "sip.example.com"
+        ],
+        "port_range": [
+          "5061:5061",
+          "10000:10100"
+        ],
+        "outbound": "➡️ Direct"
+      },
+      {
+        "ip_cidr": [
+          "192.0.2.25/32"
+        ],
+        "port_range": [
+          "5061:5061",
+          "10000:10100"
+        ],
+        "outbound": "➡️ Direct"
+      },
+      {
+        "network": "udp",
+        "port": 443,
+        "action": "reject"
+      },
+      {
+        "network": "tcp",
+        "port": 853,
+        "action": "reject"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "➡️ Direct"
+      },
+      {
+        "domain_suffix": [
+          "local",
+          "lan"
+        ],
+        "outbound": "➡️ Direct"
+      },
+      {
+        "domain_suffix": [
+          "1password.com",
+          "adobe.com",
+          "apple.com",
+          "icloud.com",
+          "microsoft.com",
+          "microsoftonline.com",
+          "live.com",
+          "office.com",
+          "paypal.com",
+          "wise.com"
+        ],
+        "outbound": "🔒 Trusted"
+      },
+      {
+        "rule_set": [
+          "geosite-ru-blocked"
+        ],
+        "outbound": "🌍 Default"
+      },
+      {
+        "rule_set": [
+          "ru-available-only-inside",
+          "geoip-ru"
+        ],
+        "outbound": "🚨 Restricted"
+      },
+      {
+        "rule_set": [
+          "geosite-ir",
+          "geoip-ir"
+        ],
+        "outbound": "🚨 Restricted"
+      }
+    ]
+  },
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "path": "cache.db",
+      "store_fakeip": true
+    },
+    "clash_api": {
+      "external_controller": "127.0.0.1:9090",
+      "secret": "testclashdavepc0000000000000000000000000000000",
+      "external_ui": "metacubexd",
+      "external_ui_download_url": "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip",
+      "external_ui_download_detour": "🔀 Proxy"
+    }
+  }
+}

@@ -1,0 +1,59 @@
+# Russia. RKN/TSPU does selective protocol/SNI blocking; the four
+# protocols give different DPI signatures so urltest can switch when
+# one shape gets flagged.
+flag: 🇷🇺
+label: RU
+
+doh_tag: yandex_doh
+doh_server: common.dns.yandex.net
+
+# Bootstrap DNS for users physically in RU. 1.1.1.1 is increasingly
+# interfered-with under RKN filtering; Yandex Public DNS is reachable
+# and resolves CF hostnames truthfully for the pre-tunnel WS-CDN host
+# lookup. Tradeoff: Yandex sees the lookup, but the WS-CDN host →
+# CF edge IPs are pooled across many sites, so this leaks little.
+bootstrap_dns: 77.88.8.8
+
+tld_suffixes: [ru, su]
+
+geosite: geosite-ru          # used for DNS routing (→ yandex_doh)
+geoip: geoip-ru              # used for 🚨 Restricted routing
+
+# Restricted-route override: prefer "ru-available-only-inside" over the
+# broader geosite-ru. It's the subset of Russian domains that actually
+# *require* a Russian IP (banks, gov, geo-locked services). Using the
+# tighter set means only sites that truly need RU-Direct get routed
+# there; geosite-ru still carries DNS for RU domains in general.
+restricted_geosite: ru-available-only-inside
+
+blocked_ruleset:
+  tag: geosite-ru-blocked
+  url: https://cdn.jsdelivr.net/gh/runetfreedom/russia-v2ray-rules-dat@release/sing-box/rule-set-geosite/geosite-ru-blocked.srs
+  update_interval: 1d
+
+rulesets:
+  - { tag: geosite-ru, url: https://cdn.jsdelivr.net/gh/runetfreedom/russia-v2ray-rules-dat@release/sing-box/rule-set-geosite/geosite-category-ru.srs, update_interval: 1d }
+  - { tag: geoip-ru,   url: https://cdn.jsdelivr.net/gh/runetfreedom/russia-v2ray-rules-dat@release/sing-box/rule-set-geoip/geoip-ru.srs, update_interval: 1d }
+  - { tag: ru-available-only-inside, url: https://cdn.jsdelivr.net/gh/runetfreedom/russia-v2ray-rules-dat@release/sing-box/rule-set-geosite/geosite-ru-available-only-inside.srs, update_interval: 1d }
+
+protocols:
+  recommended: [reality, shadowtls, hy2, awg]
+  # Country default for the 🔀 Proxy selector. shadowtls is the most
+  # resilient sing-box-native protocol to RKN/TSPU's TCP-freeze attack on
+  # suspicious foreign IPs that has degraded Reality through late 2025.
+  # awg is recommended as a *parallel* tunnel via the separate Amnezia VPN
+  # app (not the sing-box profile), so it doesn't appear as the sing-box
+  # selector default.
+  default: shadowtls
+  notes: |
+    ws-cf dropped from recommended: Cloudflare throttles Russian users
+    to ~16 KB per response (CF's own blog, 2025-06-09), with eastern-RU
+    full blocks reported since 2025-03-20 (net4people/bbs #464) and CF
+    ECH blocking since 2024-11-05 (net4people/bbs #417). Domain-fronting
+    through CF is no longer a survival path in RU.
+
+    Reality, ShadowTLS, hy2 still work; RKN/TSPU shifts targets so the
+    documented escape hatch is the user manually flipping 🔀 Proxy in
+    the dashboard when the country default breaks (no urltest emitted).
+    AWG runs in a parallel Amnezia VPN tunnel for diversity matching the
+    actual deployed-by-Russians threat model.

@@ -1,0 +1,45 @@
+## Windows setup
+
+Runs as a Windows service via NSSM, config auto-updates hourly, service restarts automatically on config change.
+
+### Install (one command, admin PowerShell)
+
+Open **PowerShell as Administrator** (Start menu → right-click PowerShell → *Run as administrator*), paste:
+
+```powershell
+iwr https://__PROFILE_HOST__/p/__SECRET__/install-singbox.ps1 -OutFile $env:TEMP\sb.ps1; & $env:TEMP\sb.ps1
+```
+
+What it does automatically:
+- Downloads sing-box, NSSM (service wrapper), wintun.dll (TUN driver).
+- Fetches + validates the latest `__WIN_FILENAME__` from the server.
+- Installs a Windows service `sing-box` (auto-starts at boot, restarts on crash).
+- Registers a scheduled task that pulls config updates every hour.
+
+Re-running the same one-liner is safe — works as upgrade / repair.
+
+### Dashboard — `http://127.0.0.1:9090/ui`
+
+Loopback-only (not reachable from your LAN). First time open, paste API secret:
+
+```
+__CLASH_SECRET__
+```
+
+Leave API Base URL at `http://127.0.0.1:9090`. Browser caches the secret in localStorage after that.
+
+### Common operations (admin PowerShell)
+
+```powershell
+# Is the service running?
+Get-Service sing-box
+
+# Force an immediate config + version check
+Start-ScheduledTask -TaskName 'sing-box config updater'
+
+# Tail the updater log
+Get-Content "C:\Program Files\sing-box\logs\update-config.log" -Tail 30
+
+# Tail sing-box's own log
+Get-Content "C:\Program Files\sing-box\logs\service.err.log" -Tail 30
+```
