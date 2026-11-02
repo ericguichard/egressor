@@ -1,4 +1,4 @@
-# Iran. National firewall is more aggressive on QUIC and on
+# Region `ir` (for example, Iran). The national firewall is more aggressive on QUIC and on
 # TLS-with-uncommon-SNIs than CN/RU. ShadowTLS+SS-2022 is the most
 # consistently reliable sing-box-native path post-2025-shutdown;
 # AWG (separate Amnezia VPN app) is the recommended parallel tunnel.
@@ -11,7 +11,7 @@ doh_server: free.shecan.ir
 # Bootstrap DNS for users physically in IR. 1.1.1.1 is ISP-filtered
 # under the national firewall; Shecan Public DNS is reachable inside IR
 # and resolves CF hostnames truthfully for the pre-tunnel WS-CDN host
-# lookup. Shecan is also a common Iranian unblocker so its use doesn't
+# lookup. Shecan is also a common local unblocker so its use doesn't
 # stand out on the wire.
 bootstrap_dns: 178.22.122.100
 
@@ -30,7 +30,7 @@ rulesets:
   - { tag: geoip-ir,   url: https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@rule-set/geoip-ir.srs,   update_interval: 1d }
 
 # Chocolate4u maintains country-specific threat/ad lists for IR that
-# catch Iranian phishing/malware domains not covered by the global
+# catch local phishing/malware domains not covered by the global
 # hagezi lists. Emitted into the DNS reject rule alongside hagezi.
 dns_reject_rulesets:
   - { tag: iran-malware,  url: https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@rule-set/geosite-malware.srs,          update_interval: 1d }
@@ -52,7 +52,7 @@ protocols:
     tightened the protocol whitelist further. Reality is not a viable
     primary in IR.
 
-    hy2 dropped: QUIC is disabled on all Iranian ISPs as of the June
+    hy2 dropped: QUIC is disabled on all ISPs in this region as of the June
     2025 shutdown — unidentified UDP is dropped on most networks,
     MCI/TCI tear down QUIC after 2-3 packets (net4people/bbs #489).
 

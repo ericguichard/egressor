@@ -489,7 +489,7 @@ the user to ask the operator what's currently working before installing.
 
 ### CN/RU iOS storefront wall
 
-Two regions matter operationally — Mainland China and Russia — and both
+Two regions matter operationally (for example, today: CN and RU), and both
 have removed essentially every sing-box-JSON-consuming client from their
 local Apple App Store:
 

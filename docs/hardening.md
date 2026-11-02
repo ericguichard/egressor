@@ -36,7 +36,7 @@ public IP at this stack and start serving real users.
   | `443` | tcp | Reality | always |
   | `443` | udp | hy2 (single-port mode) | always (also keep open in port-hopping mode as fallback for older clients) |
   | `8443` | tcp | ShadowTLS | always |
-  | `<low>:<high>` | udp | hy2 port-hopping range | if `defaults.hy2.server_ports` is set in `profiles.yaml` (see [hazards.md #10](hazards.md#10-gfw-marks-ips-sending-sustained-udp443-volume--drops-all-incoming-udp-for-1h)) |
+  | `<low>:<high>` | udp | hy2 port-hopping range | if `defaults.hy2.server_ports` is set in `profiles.yaml` (see [hazards.md #10](hazards.md#10-a-national-firewall-marks-ips-sending-sustained-udp443-volume--drops-all-incoming-udp-for-1h)) |
   | `51820` | udp | AmneziaWG | if any user has `awg` in protocols (see quickstart §9) |
 
   ws-cf doesn't appear here directly — it lives behind your reverse

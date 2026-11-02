@@ -5,7 +5,7 @@
 # sing-box's hy2 inbound actually listens on. Without it, clients would
 # hit closed ports.
 #
-# Why we do this: the GFW marks IPs that send sustained high-volume
+# Why we do this: a national firewall marks IPs that send sustained high-volume
 # UDP traffic on a fixed port and drops *all* incoming UDP from the
 # overseas side for ~hour windows (apernet/hysteria#1157). Spreading
 # packets across thousands of ports keeps any single 5-tuple flow under

@@ -1,4 +1,4 @@
-# China. GFW does both DNS hijack and active probing of TLS handshakes;
+# Region `cn` (for example, mainland China). The national firewall does both DNS hijack and active probing of TLS handshakes;
 # Reality + WS-CDN cover the two main survival paths.
 flag: 🇨🇳
 label: CN
@@ -10,7 +10,7 @@ doh_tag: dnspod_doh
 doh_server: doh.pub
 
 # Bootstrap DNS for users physically in CN. 1.1.1.1 (the global default)
-# is DNS-hijacked by the GFW; Alibaba Public DNS is reachable inside CN,
+# is DNS-hijacked by the national firewall; Alibaba Public DNS is reachable inside CN,
 # fast, and resolves Cloudflare hostnames truthfully (used for the
 # pre-tunnel WS-CDN host lookup). Tradeoff: Alibaba sees the lookup
 # instead of Cloudflare, but CF edge IPs are heavily pooled so this
@@ -25,7 +25,7 @@ geosite: geosite-cn
 geoip: geoip-cn
 
 # Extra rule-set routed to 🌍 Default (bypassing the country selector) —
-# GFW-blocked sites that happen to have CN ccTLDs (e.g. google.com.hk)
+# Firewall-blocked sites that happen to have CN ccTLDs (e.g. google.com.hk)
 # must tunnel, not go Direct.
 blocked_ruleset:
   tag: gfwlist-cn
@@ -51,5 +51,5 @@ protocols:
   notes: |
     All four work. Reality is fastest when the proxy IP isn't actively
     blocked; ws-cf through Cloudflare is the survival path when it is.
-    hy2 over UDP/443 is fast but the GFW periodically throttles sustained
+    hy2 over UDP/443 is fast but the national firewall periodically throttles sustained
     QUIC flows.

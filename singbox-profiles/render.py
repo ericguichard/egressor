@@ -1785,7 +1785,7 @@ def frag_route(user, device, defaults):
         if home_tlds:
             rules.append({'domain_suffix': home_tlds, 'outbound': '🏠 Home Sites'})
 
-    # GFW-blocked / RU-blocked: route to 🌍 Default so they always tunnel
+    # Firewall-blocked (CN/RU lists): route to 🌍 Default so they always tunnel
     # (never to a country alias Direct that would dead-end them).
     blocked_tags = []
     for cc in countries:

@@ -87,7 +87,7 @@ function Log($msg) { Write-Host "[install-singbox] $msg" -ForegroundColor Cyan }
 
 # Retry wrapper for Invoke-WebRequest. Every fetch in this installer
 # crosses __PROFILE_HOST__ over whatever network the user happens to be on —
-# GFW-adjacent TLS handshakes routinely stall once on the first packet
+# TLS handshakes near a national firewall routinely stall once on the first packet
 # and succeed immediately on a retry. Three attempts with 2s + 5s
 # backoff turns a one-packet hiccup from "install aborted" into a
 # sub-10s delay. For calls that already have a fallback URL (mirror ->
@@ -123,7 +123,7 @@ New-Item -ItemType Directory -Force -Path $INSTALL_DIR, $LOG_DIR | Out-Null
 # 1a. DO NOT stop the service yet ------------------------------------
 # We stop it only in step 5, after all downloads are complete. Reason:
 # CN-resident users reach __PROFILE_HOST__ ONLY through the sing-box tunnel
-# (Oracle IP is GFW-blocked on the direct ISP path). Stopping the
+# (the server IP is firewall-blocked on the direct ISP path). Stopping the
 # service first would tear down the only network route to our own
 # mirror, making the installer unrunnable on re-provisioning. Instead,
 # all downloads land in $env:TEMP while the tunnel stays up, then we

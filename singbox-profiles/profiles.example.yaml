@@ -75,7 +75,7 @@ defaults:
     # Optional: enable port-hopping for clients (recommended for CN
     # users — see docs/hazards.md "hy2 UDP/443 IP-marking"). When set,
     # clients dial random ports from this range instead of server_port,
-    # spreading volume so no single 5-tuple flow trips the GFW's per-IP
+    # spreading volume so no single 5-tuple flow trips a national firewall's per-IP
     # heavy-UDP heuristic. Server still listens on server_port; a host
     # iptables redirect (set up via singbox-server/setup-hy2-port-hop.sh)
     # collapses the range back to that single port. Open the same UDP

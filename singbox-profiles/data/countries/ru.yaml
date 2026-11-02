@@ -1,4 +1,4 @@
-# Russia. RKN/TSPU does selective protocol/SNI blocking; the four
+# Region `ru` (for example, Russia). The national firewall does selective protocol/SNI blocking; the four
 # protocols give different DPI signatures so urltest can switch when
 # one shape gets flagged.
 flag: 🇷🇺
@@ -20,8 +20,8 @@ geosite: geosite-ru          # used for DNS routing (→ yandex_doh)
 geoip: geoip-ru              # used for 🚨 Restricted routing
 
 # Restricted-route override: prefer "ru-available-only-inside" over the
-# broader geosite-ru. It's the subset of Russian domains that actually
-# *require* a Russian IP (banks, gov, geo-locked services). Using the
+# broader geosite-ru. It's the subset of the region's domains that actually
+# *require* a local IP (banks, gov, geo-locked services). Using the
 # tighter set means only sites that truly need RU-Direct get routed
 # there; geosite-ru still carries DNS for RU domains in general.
 restricted_geosite: ru-available-only-inside
@@ -46,14 +46,14 @@ protocols:
   # selector default.
   default: shadowtls
   notes: |
-    ws-cf dropped from recommended: Cloudflare throttles Russian users
+    ws-cf dropped from recommended: Cloudflare traffic is throttled for users in this region
     to ~16 KB per response (CF's own blog, 2025-06-09), with eastern-RU
     full blocks reported since 2025-03-20 (net4people/bbs #464) and CF
     ECH blocking since 2024-11-05 (net4people/bbs #417). Domain-fronting
     through CF is no longer a survival path in RU.
 
-    Reality, ShadowTLS, hy2 still work; RKN/TSPU shifts targets so the
+    Reality, ShadowTLS, hy2 still work; the firewall shifts targets so the
     documented escape hatch is the user manually flipping 🔀 Proxy in
     the dashboard when the country default breaks (no urltest emitted).
     AWG runs in a parallel Amnezia VPN tunnel for diversity matching the
-    actual deployed-by-Russians threat model.
+    threat model actually deployed against in this region.

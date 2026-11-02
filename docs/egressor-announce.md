@@ -42,7 +42,7 @@ if your instance counts differently. Mastodon counts every link as 23.)
 ## Longer — Reddit, Hacker News, forums (~260 words)
 
 Suggested HN title (hyphen, not a dash):
-`Show HN: Egressor - one YAML manifest to get a household out through the GFW`
+`Show HN: Egressor - one YAML manifest to get a household past a national firewall`
 
 (Fallback if that reads too cute for HN: `Show HN: Egressor - sing-box
 config generator for households in restrictive networks`.)

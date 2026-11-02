@@ -8,7 +8,8 @@
 ## The problem
 
 You want to give a household or small team reliable internet access from
-inside (or while travelling to) China, Russia, or Iran. The constraints
+inside (or while travelling to) a country with a national firewall (for
+example China, Russia or Iran). The constraints
 stack up fast:
 
 - **Commercial VPNs get fingerprinted and blocked** within weeks in these
@@ -20,8 +21,8 @@ stack up fast:
   national firewall they're behind, periodic credential rotation, and
   client configs that stay in agreement with the server — is a part-time
   job nobody signed up for.
-- **Per-region routing** matters: a Chinese user wants `bilibili.com`
-  direct, not proxied; a Russian user wants `ru-blocked.srs` proxied and
+- **Per-region routing** matters: a user in the `cn` region wants `bilibili.com`
+  direct, not proxied; a user in the `ru` region wants `ru-blocked.srs` proxied and
   the rest direct; a traveller wants their banking traffic to exit from
   their home country, not the VPS.
 - **Credential rotation** has to be routine, not a fire drill — but
@@ -267,7 +268,7 @@ manually switches lanes in the dashboard when one shape gets flagged.
 against a real third-party site (e.g. `cloud.example.com`) — the client's
 ClientHello carries a Reality public-key probe in its extensions, and if
 it matches, the server takes over and proxies VLESS underneath; if it
-doesn't match (random scanner, GFW prober), the server transparently
+doesn't match (random scanner, national-firewall prober), the server transparently
 forwards the connection to the real cover site, which completes the
 handshake and serves its actual content. So an active prober sees a
 genuine, valid TLS session to a legitimate site every time. *Trade-off:*
@@ -285,9 +286,9 @@ origin; VLESS rides inside the WS. (ECH would additionally hide the
 SNI, but sing-box cannot combine ECH with a uTLS fingerprint — the
 dial fails outright — and the ECH extension is itself a censor tell;
 see `hazards.md` #21.) *Trade-off:* an extra hop's latency, and
-you inherit Cloudflare's reachability. *Known weakness:* Russia has
-periodically throttled CF's CIDR ranges wholesale (collateral damage
-for them, but they've done it). Also smux on this outbound interacts
+you inherit Cloudflare's reachability. *Known weakness:* some national
+firewalls have periodically throttled CF's CIDR ranges wholesale (collateral
+damage for them, but it has happened, for example in the `ru` region). Also smux on this outbound interacts
 badly with CF's WS buffering and is disabled — see `hazards.md` #3.
 *Survival role:* this is the only inbound that survives "your VPS IP
 is blackholed," because clients aren't dialling your VPS.
@@ -335,19 +336,19 @@ in the in-app selector. Two apps to install, not one. *Known
 weakness:* same blanket-UDP-throttling risk as hy2 — both die together
 under IP-level UDP marking. *When to enable it:* RU users where TSPU
 has degraded Reality, IR users where the national firewall pressures
-TLS-shaped traffic. Off by default for CN (the GFW handles
+TLS-shaped traffic. Off by default for CN (that firewall handles
 protocol-aware classifiers but doesn't broadly mark UDP).
 
 **Shared UDP-class risk worth flagging:** AmneziaWG and Hysteria2 both
 die under blanket UDP marking. The protocol-specific classifiers that
 censors actually deploy are uncorrelated, but the IP-level UDP throttling
-RU TSPU and Iranian ISPs have demonstrated isn't — when both UDP
+some national firewalls (for example in RU and IR) have demonstrated isn't — when both UDP
 protocols go dark together, fall back to one of the three TCP shapes.
 
 AmneziaWG's role is specifically the threat model RU users actually face:
 TSPU's TCP-freeze attack on suspicious foreign IPs has degraded Reality
 through late 2025; CF CIDR whitelisting has degraded VLESS-over-WS in
-parallel. AWG is the protocol Russians are actually deploying — Amnezia's
+parallel. AWG is the protocol actually being deployed in that region — Amnezia's
 Banzaev confirms the operates-stably-with-periodic-signature-blocks
 model in the Jan 2026 TechRadar interview. AWG runs in a *separate*
 [Amnezia VPN](https://amnezia.org/) app rather than the sing-box profile;
@@ -367,8 +368,8 @@ item, not a default. Re-evaluate ~every 6 months.
 
 **In scope:**
 
-- DPI on the path between clients and the proxy server (CN GFW, RU TSPU,
-  IR national firewall) — addressed via four protocol shapes with
+- DPI on the path between clients and the proxy server (for example
+  the national firewalls in the CN, RU and IR regions) — addressed via four protocol shapes with
   different DPI signatures, per-user fingerprint decorrelation, and
   Cloudflare-fronted fallback.
 - Server-side passive cred capture — every credential is per-user,
@@ -458,12 +459,12 @@ Stands on the shoulders of:
   AmneziaWG usable in CN/RU/IR where vanilla WireGuard is fingerprinted
   and blocked.
 - [MetaCubeX/meta-rules-dat](https://github.com/MetaCubeX/meta-rules-dat) —
-  the CN geosite/geoip rule-sets and the GFW geosite list used for split
+  the CN geosite/geoip rule-sets and the blocked-sites geosite list used for split
   routing in the CN profile.
 - [runetfreedom/russia-v2ray-rules-dat](https://github.com/runetfreedom/russia-v2ray-rules-dat) —
   the RU geosite/geoip rule-sets, including the `ru-blocked` and
   `ru-available-only-inside` subsets that drive the 🚨 Restricted route
-  for Russian users.
+  for users in the RU region.
 - [chocolate4u/Iran-sing-box-rules](https://github.com/chocolate4u/Iran-sing-box-rules) —
   the IR geosite/geoip rule-sets plus the malware/phishing/ads lists
   layered into the default DNS reject rule when IR is enabled.

@@ -259,7 +259,7 @@ Don't try to wrap the container command with `sh -c '... | sed'` — that
 breaks pid-1 signal semantics (sing-box no longer receives SIGTERM
 cleanly), so `docker stop` waits the full grace period before SIGKILL.
 
-## 10. GFW marks IPs sending sustained UDP/443 volume — drops *all* incoming UDP for ~1h
+## 10. A national firewall marks IPs sending sustained UDP/443 volume — drops *all* incoming UDP for ~1h
 
 **Symptom.** Hysteria2 from CN works fine for a while, then a single
 client (or many clients sharing the same overseas server IP) suddenly
@@ -268,7 +268,7 @@ hour. TCP to the same server (Reality on TCP/443, ShadowTLS on TCP/8443)
 keeps working. urltest demotes hy2; user notices nothing if they have
 TCP fallbacks enabled.
 
-**Why.** GFW maintains a per-IP heuristic that flags overseas hosts
+**Why.** The national firewall (for example in the CN region) maintains a per-IP heuristic that flags overseas hosts
 generating sustained high-volume UDP/443 flows from inside CN. Once
 flagged, all UDP from that host is dropped at the border for the
 rest of an hourly window (apernet/hysteria#1157, Telegram-sourced
